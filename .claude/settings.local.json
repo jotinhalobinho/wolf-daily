@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"C:\\\\Users\\\\joaog\\\\Downloads\\\\rateio-de-horas\")",
+      "Bash(npm -v)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(node -e ' *)",
+      "Bash(npx tsc *)",
+      "Bash(powershell -Command \"Get-ChildItem -Force 'C:\\\\Users\\\\joaog\\\\Downloads\\\\rateio-de-horas' | Select-Object Name, Length, LastWriteTime\")",
+      "Bash(powershell -Command \"Get-ChildItem -Recurse -Force 'C:\\\\Users\\\\joaog\\\\Downloads\\\\rateio-de-horas\\\\source', 'C:\\\\Users\\\\joaog\\\\Downloads\\\\rateio-de-horas\\\\server' | Select-Object FullName, Length\")",
+      "Bash(powershell -Command \"if \\(Test-Path 'C:\\\\Users\\\\joaog\\\\Downloads\\\\rateio-de-horas\\\\server\\\\data\\\\app.db'\\) { Get-Item 'C:\\\\Users\\\\joaog\\\\Downloads\\\\rateio-de-horas\\\\server\\\\data\\\\app.db' | Select-Object Name, Length, LastWriteTime } else { 'no db file' }\")",
+      "Bash(rm -f /tmp/qa_cookies.txt)",
+      "Bash(curl -s -c /tmp/qa_cookies.txt -X POST http://localhost:4000/api/auth/login -H \"Content-Type: application/json\" -d '{\"username\":\"__qa_temp\",\"password\":\"6d40d292e50d318c55a89679\"}')",
+      "Bash(curl -s -b /tmp/qa_cookies.txt http://localhost:4000/api/daily/current)",
+      "Bash(curl -s -b /tmp/qa_cookies.txt -X POST http://localhost:4000/api/daily/periods -H \"Content-Type: application/json\" -d '{\"month\":8,\"year\":2026}')",
+      "Bash(curl -s -b /tmp/qa_cookies.txt -X POST http://localhost:4000/api/daily/periods -H \"Content-Type: application/json\" -d '{\"month\":9,\"year\":2026}')",
+      "Bash(mkdir -p C:/Users/joaog/AppData/Local/Temp/claude/C--Users-joaog-Downloads-rateio-de-horas/821548bd-acaa-4c36-8cef-6803051d7568/scratchpad)",
+      "Bash(node check_sept.js)",
+      "Bash(curl -s -b /tmp/qa_cookies.txt http://localhost:4000/api/daily/periods)",
+      "Bash(curl -s -b /tmp/qa_cookies.txt http://localhost:4000/api/daily/periods/cc495011-3e3f-4884-bef3-2bd88e4674d7)",
+      "Bash(curl -s -b /tmp/qa_cookies.txt -X POST http://localhost:4000/api/daily/days/65/items -H 'Content-Type: application/json' -d '{\"unit\":\"woncred\",\"projectName\":\"Projeto Recorrente\"}')",
+      "Bash(curl -s -b /tmp/qa_cookies.txt http://localhost:4000/api/daily/projects)"
+    ]
+  }
+}
