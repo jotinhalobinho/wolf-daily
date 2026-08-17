@@ -13,6 +13,9 @@ function getSecret() {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
   if (fs.existsSync(SECRET_PATH)) return fs.readFileSync(SECRET_PATH, "utf8").trim();
   const secret = crypto.randomBytes(48).toString("hex");
+  // "server/data" não é mais criado pelo db.js (não existe mais banco em
+  // arquivo), então garantimos que a pasta exista antes de gravar o segredo.
+  fs.mkdirSync(path.dirname(SECRET_PATH), { recursive: true });
   fs.writeFileSync(SECRET_PATH, secret, { mode: 0o600 });
   return secret;
 }
@@ -50,12 +53,12 @@ function clearAuthCookie(res) {
 }
 
 // Returns { id, username, role, collaboratorId } or null. Never throws.
-function getUserFromReq(req) {
+async function getUserFromReq(req) {
   const token = req.cookies && req.cookies[COOKIE_NAME];
   if (!token) return null;
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    const user = db.prepare("SELECT * FROM users WHERE id = ?").get(payload.uid);
+    const user = await db.get("SELECT * FROM users WHERE id = ?", [payload.uid]);
     if (!user) return null;
     return { id: user.id, username: user.username, role: user.role, collaboratorId: user.collaborator_id };
   } catch (e) {
@@ -63,11 +66,15 @@ function getUserFromReq(req) {
   }
 }
 
-function requireAuth(req, res, next) {
-  const user = getUserFromReq(req);
-  if (!user) return res.status(401).json({ error: "Não autenticado" });
-  req.user = user;
-  next();
+async function requireAuth(req, res, next) {
+  try {
+    const user = await getUserFromReq(req);
+    if (!user) return res.status(401).json({ error: "Não autenticado" });
+    req.user = user;
+    next();
+  } catch (e) {
+    next(e);
+  }
 }
 
 function requireAdmin(req, res, next) {

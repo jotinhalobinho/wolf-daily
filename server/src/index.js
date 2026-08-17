@@ -7,7 +7,7 @@ const cookieParser = require("cookie-parser");
 const cors = require("cors");
 require("dotenv").config();
 
-require("./db"); // ensures schema exists / migrations run before anything else
+const db = require("./db");
 
 const authRoutes = require("./routes/auth");
 const usersRoutes = require("./routes/users");
@@ -53,6 +53,26 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Erro interno do servidor" });
 });
 
-app.listen(PORT, () => {
-  console.log(`\n  Rateio de Horas — servidor rodando em http://localhost:${PORT}\n`);
-});
+async function start() {
+  // Falha rápido e com mensagem clara se o MySQL/MariaDB estiver inacessível,
+  // em vez de deixar o servidor subir normalmente e só quebrar na primeira
+  // requisição que tentar usar o banco.
+  try {
+    await db.pool.query("SELECT 1");
+  } catch (err) {
+    // Node envolve falhas de conexão (ex: ECONNREFUSED em ::1 e 127.0.0.1)
+    // num AggregateError cuja .message vem vazia — o detalhe de verdade fica
+    // dentro de .errors.
+    const detail = err.errors && err.errors.length ? err.errors.map((e) => e.message).join("; ") : err.message;
+    console.error("\n  [ERRO] Não foi possível conectar ao banco de dados.");
+    console.error("  Confira as variáveis DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME no .env.");
+    console.error("  Detalhe:", detail || err, "\n");
+    process.exit(1);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`\n  Rateio de Horas — servidor rodando em http://localhost:${PORT}\n`);
+  });
+}
+
+start();
