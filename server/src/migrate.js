@@ -26,6 +26,13 @@ async function runMigrations() {
     console.log("  [migração] coluna collaborators.birth_date criada.");
   }
 
+  // Day off de aniversário: um único dia por mês, marcado no Rateio Diário,
+  // que some as horas sem centro de custo (ver [[daily-suggestion-feature]]).
+  if (!(await columnExists("daily_days", "day_off"))) {
+    await db.run("ALTER TABLE daily_days ADD COLUMN day_off TINYINT(1) NOT NULL DEFAULT 0 AFTER atestado");
+    console.log("  [migração] coluna daily_days.day_off criada.");
+  }
+
   // Amplia o centro de custo do rateio diário para aceitar "geral" (demanda
   // que não precisa ser lançada num centro de custo específico).
   const unitColumn = await db.get(

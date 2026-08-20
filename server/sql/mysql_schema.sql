@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS daily_days (
   holiday_name      VARCHAR(255) NULL,
   holiday_override  TINYINT(1) NULL,
   atestado          TINYINT(1) NOT NULL DEFAULT 0,
+  day_off           TINYINT(1) NOT NULL DEFAULT 0,
   CONSTRAINT uq_period_date UNIQUE (period_id, date),
   CONSTRAINT fk_days_period
     FOREIGN KEY (period_id) REFERENCES daily_periods(id) ON DELETE CASCADE

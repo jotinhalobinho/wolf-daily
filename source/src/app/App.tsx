@@ -67,6 +67,10 @@ interface RateioEntry {
   // Dias de atestado/afastamento no período — cada dia lançado aqui reduz em 1
   // o total de dias que o colaborador precisa distribuir para completar o rateio.
   atestados: UnitProject[];
+  // Day off de aniversário — normalmente 1 item só, sincronizado a partir do
+  // dia marcado no Rateio Diário (ver [[daily-suggestion-feature]]). Também
+  // reduz o total de dias a distribuir, igual atestado.
+  dayOffs: UnitProject[];
   observations: string;
   submitted: boolean;
 }
@@ -163,8 +167,12 @@ const entryTotal = (e: RateioEntry) =>
 const atestadoTotal = (e: RateioEntry) =>
   (e.atestados ?? []).reduce((s, p) => s + p.days, 0);
 
-// O colaborador aniversariante no mês do período ganha 1 dia de folga (day
-// off), descontado do total de dias que precisa distribuir nesse rateio.
+const dayOffTotal = (e: RateioEntry) =>
+  (e.dayOffs ?? []).reduce((s, p) => s + p.days, 0);
+
+// O colaborador aniversariante no mês do período pode marcar um day off no
+// Rateio Diário — isto aqui é só usado como dica na tela (mostrar o cartão de
+// day off / lembrete); o desconto de verdade vem de dayOffTotal, igual atestado.
 // release.month é 0-indexado (0 = Janeiro), igual ao mês extraído de "YYYY-MM-DD".
 const isBirthdayMonth = (collaborator: Collaborator | undefined, releaseMonth: number) => {
   const birthDate = collaborator?.birthDate;
@@ -174,16 +182,16 @@ const isBirthdayMonth = (collaborator: Collaborator | undefined, releaseMonth: n
 };
 
 // Total de dias que o colaborador precisa distribuir para "completar" o
-// período: os dias úteis do período menos os dias de atestado lançados e,
-// se for o mês do aniversário dele, menos 1 dia de folga.
-const requiredDays = (workingDays: number, e: RateioEntry, birthdayOff = false) =>
-  Math.max(0, workingDays - atestadoTotal(e) - (birthdayOff ? 1 : 0));
+// período: os dias úteis do período menos os dias de atestado e de day off lançados.
+const requiredDays = (workingDays: number, e: RateioEntry) =>
+  Math.max(0, workingDays - atestadoTotal(e) - dayOffTotal(e));
 
 const blankEntry = (collaboratorId: string): RateioEntry => ({
   collaboratorId,
   unitProjects: { wolf: [], fraga: [], woncred: [], profit: [] },
   generalProjects: [],
   atestados: [],
+  dayOffs: [],
   observations: "", submitted: false,
 });
 
@@ -668,9 +676,8 @@ function AdminRateio({ releases, setReleases, collaborators, workingDays }: Admi
           <div className="space-y-3">
             {[...releases].reverse().map((r) => {
               const total = r.entries.reduce((s, e) => s + entryTotal(e), 0);
-              const targetFor = (e: RateioEntry) => requiredDays(r.workingDays, e, isBirthdayMonth(collaborators.find((c) => c.id === e.collaboratorId), r.month));
-              const done = r.entries.filter((e) => entryTotal(e) === targetFor(e)).length;
-              const totalPossible = r.entries.reduce((s, e) => s + targetFor(e), 0);
+              const done = r.entries.filter((e) => entryTotal(e) === requiredDays(r.workingDays, e)).length;
+              const totalPossible = r.entries.reduce((s, e) => s + requiredDays(r.workingDays, e), 0);
               return (
                 <button key={r.id} onClick={() => setSelectedId(r.id)} className="w-full bg-white border border-[rgba(0,0,0,0.07)] rounded-xl px-5 py-4 text-left hover:border-[rgba(0,0,0,0.14)] hover:shadow-sm transition-all flex items-center gap-4">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${r.status === "approved" ? "bg-emerald-50" : "bg-blue-50"}`}>
@@ -749,6 +756,11 @@ function exportReleaseToExcel(release: RateioRelease, collaborators: Collaborato
       if (!p.days) continue;
       rows.push(["", competencia, c.name, p.name, "", "Atestado", "", "", p.days]);
     }
+
+    for (const p of entry.dayOffs ?? []) {
+      if (!p.days) continue;
+      rows.push(["", competencia, c.name, p.name, "", "Day Off", "", "", p.days]);
+    }
   }
 
   const worksheet = XLSX.utils.aoa_to_sheet(rows);
@@ -791,10 +803,7 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
     }, 0),
   }));
   const totalRateado = unitTotals.reduce((s, u) => s + u.valor, 0);
-  const allComplete = release.entries.every((e) => {
-    const c = collaborators.find((x) => x.id === e.collaboratorId);
-    return entryTotal(e) === requiredDays(release.workingDays, e, isBirthdayMonth(c, release.month));
-  });
+  const allComplete = release.entries.every((e) => entryTotal(e) === requiredDays(release.workingDays, e));
 
   return (
     <div className="flex-1 flex overflow-hidden">
@@ -845,8 +854,7 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
                 {collaborators.map((c) => {
                   const entry = release.entries.find((e) => e.collaboratorId === c.id) ?? blankEntry(c.id);
                   const total = entryTotal(entry);
-                  const birthdayOff = isBirthdayMonth(c, release.month);
-                  const target = requiredDays(release.workingDays, entry, birthdayOff);
+                  const target = requiredDays(release.workingDays, entry);
                   const rate = dailyRate(c.salary, release.workingDays);
                   const isExpanded = expandedId === c.id;
                   return (
@@ -868,8 +876,8 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
                                 {atestadoTotal(entry) > 0 && (
                                   <span className="text-[9px] font-medium px-1 py-0.5 bg-amber-50 text-amber-600 rounded">atestado {atestadoTotal(entry)}d</span>
                                 )}
-                                {birthdayOff && (
-                                  <span className="text-[9px] font-medium px-1 py-0.5 bg-pink-50 text-pink-600 rounded">🎂 aniversário: -1d</span>
+                                {dayOffTotal(entry) > 0 && (
+                                  <span className="text-[9px] font-medium px-1 py-0.5 bg-pink-50 text-pink-600 rounded">🎂 day off {dayOffTotal(entry)}d</span>
                                 )}
                               </div>
                               <p className="text-[11px] text-[#a1a1aa] leading-tight">{c.role}</p>
@@ -996,7 +1004,25 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
                                   </div>
                                 </div>
                               )}
-                              {!entry.observations && !UNITS.some((u) => (entry.unitProjects?.[u] ?? []).length > 0) && !(entry.generalProjects ?? []).length && !(entry.atestados ?? []).length && (
+                              {/* Day off de aniversário */}
+                              {(entry.dayOffs ?? []).length > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-pink-500" />
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-pink-600">🎂 Day off</p>
+                                    <span className="text-[10px] font-semibold tabular-nums text-pink-600 ml-auto" style={{ fontFamily: "var(--font-mono)" }}>{dayOffTotal(entry)}d</span>
+                                  </div>
+                                  <div className="space-y-1">
+                                    {(entry.dayOffs ?? []).map((p, pi) => (
+                                      <div key={pi} className="flex items-center justify-between gap-3">
+                                        <span className="text-[11px] text-[#52525b] truncate">{p.name}</span>
+                                        <span className="text-[11px] font-semibold tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-pink-50 text-pink-600" style={{ fontFamily: "var(--font-mono)" }}>{p.days}d</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {!entry.observations && !UNITS.some((u) => (entry.unitProjects?.[u] ?? []).length > 0) && !(entry.generalProjects ?? []).length && !(entry.atestados ?? []).length && !(entry.dayOffs ?? []).length && (
                                 <p className="text-xs text-[#a1a1aa] italic">Nenhuma informação adicional</p>
                               )}
                             </div>
@@ -1099,7 +1125,7 @@ function CollaboratorRateio({ releases, setReleases, collaborator, workingDays }
               {openReleases.map((r) => {
                 const entry = r.entries.find((e) => e.collaboratorId === collaborator.id) ?? blankEntry(collaborator.id);
                 const total = entryTotal(entry);
-                const target = requiredDays(r.workingDays, entry, isBirthdayMonth(collaborator, r.month));
+                const target = requiredDays(r.workingDays, entry);
                 return (
                   <button key={r.id} onClick={() => setSelectedId(r.id)} className="w-full flex items-center justify-between bg-white rounded-lg px-4 py-2.5 text-left hover:shadow-sm transition-all border border-blue-100">
                     <div>
@@ -1123,7 +1149,7 @@ function CollaboratorRateio({ releases, setReleases, collaborator, workingDays }
           {allReleases.map((r) => {
             const entry = r.entries.find((e) => e.collaboratorId === collaborator.id) ?? blankEntry(collaborator.id);
             const total = entryTotal(entry);
-            const target = requiredDays(r.workingDays, entry, isBirthdayMonth(collaborator, r.month));
+            const target = requiredDays(r.workingDays, entry);
             return (
               <button key={r.id} onClick={() => setSelectedId(r.id)} className="w-full bg-white border border-[rgba(0,0,0,0.07)] rounded-xl px-5 py-3.5 text-left hover:border-[rgba(0,0,0,0.14)] transition-all flex items-center gap-3">
                 <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${r.status === "approved" ? "bg-emerald-50" : "bg-blue-50"}`}>
@@ -1159,15 +1185,16 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
     ...initialEntry,
     unitProjects: initialEntry.unitProjects ?? { wolf: [], fraga: [], woncred: [], profit: [] },
     atestados: initialEntry.atestados ?? [],
+    dayOffs: initialEntry.dayOffs ?? [],
   });
   const [savedFlash, setSavedFlash] = useState(false);
   const [fillingFromDaily, setFillingFromDaily] = useState(false);
   const isLocked = release.status === "approved";
 
   const total = entryTotal(draft);
-  const birthdayOff = isBirthdayMonth(collaborator, release.month);
-  // Dias de atestado (e o day off de aniversário, se for o mês) reduzem o total exigido para completar o rateio.
-  const target = requiredDays(release.workingDays, draft, birthdayOff);
+  const birthdayMonth = isBirthdayMonth(collaborator, release.month);
+  // Dias de atestado e de day off (marcado no Rateio Diário) reduzem o total exigido para completar o rateio.
+  const target = requiredDays(release.workingDays, draft);
   const remaining = target - total;
 
   const setUnitProjects = (u: Unit, projects: UnitProject[]) => {
@@ -1189,12 +1216,12 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
     }
     setFillingFromDaily(true);
     apiGet(`/releases/${release.id}/entries/${collaborator.id}/daily-suggestion`)
-      .then((s: { found: boolean; unitProjects: Record<Unit, UnitProject[]>; generalProjects: UnitProject[]; atestados: UnitProject[] }) => {
+      .then((s: { found: boolean; unitProjects: Record<Unit, UnitProject[]>; generalProjects: UnitProject[]; atestados: UnitProject[]; dayOffs: UnitProject[] }) => {
         if (!s.found) {
           alert("Nenhum lançamento encontrado no Rateio Diário para este mês.");
           return;
         }
-        setDraft((d) => ({ ...d, unitProjects: s.unitProjects, generalProjects: s.generalProjects, atestados: s.atestados }));
+        setDraft((d) => ({ ...d, unitProjects: s.unitProjects, generalProjects: s.generalProjects, atestados: s.atestados, dayOffs: s.dayOffs }));
       })
       .catch((e) => alert(e.message))
       .finally(() => setFillingFromDaily(false));
@@ -1245,8 +1272,11 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
                   {release.workingDays} dias úteis − {atestadoTotal(draft)} dia(s) de atestado
                 </p>
               )}
-              {birthdayOff && (
-                <p className="text-[10px] text-pink-600 mt-0.5">🎂 Aniversário este mês − 1 dia de folga (day off)</p>
+              {dayOffTotal(draft) > 0 && (
+                <p className="text-[10px] text-pink-600 mt-0.5">🎂 Day off de aniversário − {dayOffTotal(draft)} dia(s)</p>
+              )}
+              {dayOffTotal(draft) === 0 && birthdayMonth && (
+                <p className="text-[10px] text-pink-600 mt-0.5">🎂 Este é seu mês de aniversário — marque o day off no Rateio Diário</p>
               )}
             </div>
             <div className="flex items-center gap-4">
@@ -1272,6 +1302,12 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
                 <div className="text-center">
                   <p className="text-[9px] font-medium uppercase tracking-wider mb-0.5 text-amber-600">Atestado</p>
                   <p className="text-base font-semibold tabular-nums text-amber-600" style={{ fontFamily: "var(--font-mono)" }}>{atestadoTotal(draft)}</p>
+                </div>
+              )}
+              {dayOffTotal(draft) > 0 && (
+                <div className="text-center">
+                  <p className="text-[9px] font-medium uppercase tracking-wider mb-0.5 text-pink-600">Day off</p>
+                  <p className="text-base font-semibold tabular-nums text-pink-600" style={{ fontFamily: "var(--font-mono)" }}>{dayOffTotal(draft)}</p>
                 </div>
               )}
               <StatusBadge total={total} workingDays={target} />
@@ -1324,6 +1360,49 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
                 disabled={isLocked}
                 itemLabel="atestado (ex: data e motivo)"
                 onChange={(updated) => setDraft((d) => ({ ...d, atestados: updated }))}
+              />
+            </div>
+          );
+        })()}
+
+        {/* Day off de aniversário — normalmente vem sozinho do dia marcado no
+            Rateio Diário (via "Preencher com o diário"); só aparece aqui no
+            mês do aniversário ou se já tiver algo lançado. */}
+        {(birthdayMonth || dayOffTotal(draft) > 0) && (() => {
+          const dd = dayOffTotal(draft);
+          const dItems = draft.dayOffs ?? [];
+          return (
+            <div
+              className="bg-white border rounded-xl p-5 transition-all"
+              style={{ borderColor: dd > 0 ? "rgba(219,39,119,0.35)" : "rgba(0,0,0,0.07)" }}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-pink-500" />
+                  <p className="text-sm font-semibold">🎂 Day off de aniversário</p>
+                  <span className="text-[10px] text-[#a1a1aa] font-normal">marcado no Rateio Diário, no dia do aniversário</span>
+                </div>
+                <span
+                  className="text-sm font-bold tabular-nums px-2 py-0.5 rounded-lg"
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    backgroundColor: dd > 0 ? "#fdf2f8" : "#f7f7f8",
+                    color: dd > 0 ? "#db2777" : "#c0c0c8",
+                  }}
+                >
+                  {dd > 0 ? `${dd}d` : "0d"}
+                </span>
+              </div>
+              {dItems.length === 0 && (
+                <p className="text-xs text-[#c0c0c8] italic">Nenhum day off marcado ainda — use "Preencher com o diário" depois de marcar no Rateio Diário.</p>
+              )}
+              <ProjectEntryInput
+                projects={dItems}
+                color="#db2777"
+                lightBg="#fdf2f8"
+                disabled={isLocked}
+                itemLabel="day off (ex: data do aniversário)"
+                onChange={(updated) => setDraft((d) => ({ ...d, dayOffs: updated }))}
               />
             </div>
           );
@@ -2204,7 +2283,7 @@ function DashboardView({ collaborators, releases, projects, workingDays, role, c
             <h3 className="text-sm font-semibold mb-4">Períodos Recentes</h3>
             <div className="space-y-2">
               {[...releases].reverse().slice(0, 5).map((r) => {
-                const done = r.entries.filter((e) => entryTotal(e) === requiredDays(r.workingDays, e, isBirthdayMonth(collaborators.find((c) => c.id === e.collaboratorId), r.month))).length;
+                const done = r.entries.filter((e) => entryTotal(e) === requiredDays(r.workingDays, e)).length;
                 return (
                   <div key={r.id} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -2600,7 +2679,10 @@ function MainApp({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
       )}
 
       {view === "diario" && (
-        <DailyRateio displayName={role === "admin" ? user.username : (currentCollaborator?.name ?? user.username)} />
+        <DailyRateio
+          displayName={role === "admin" ? user.username : (currentCollaborator?.name ?? user.username)}
+          birthDate={currentCollaborator?.birthDate}
+        />
       )}
 
       {view === "projetos" && role === "admin" && (

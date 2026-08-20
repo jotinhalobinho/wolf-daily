@@ -30,7 +30,17 @@ interface DailyDay {
   holidayOverride: number | null; // null = sem decisão, 0 = excluído, 1 = considerado útil
   isBusinessDay: boolean;
   atestado: boolean;
+  // Day off de aniversário — só um dia por período, só no mês do aniversário
+  // (validado no servidor). Some qualquer lançamento do dia, igual atestado.
+  dayOff: boolean;
   items: DailyItem[];
+}
+
+// true se o mês do período bate com o mês de aniversário do colaborador
+// (birthDate "YYYY-MM-DD"). period.month já é 1-12, igual o mês extraído da data.
+function isBirthdayPeriod(birthDate: string | undefined, periodMonth: number): boolean {
+  if (!birthDate) return false;
+  return Number(birthDate.split("-")[1]) === periodMonth;
 }
 
 interface DailyPeriod {
@@ -149,9 +159,11 @@ function exportDailyPeriodToExcel(period: DailyPeriod, displayName: string) {
 
   const totals = new Map<string, { projectName: string; units: Unit[]; general: boolean; operations: OperationTag[]; days: number }>();
   let atestadoDays = 0;
+  let dayOffDays = 0;
 
   for (const day of period.days) {
     if (!day.isBusinessDay) continue;
+    if (day.dayOff) { dayOffDays += 1; continue; }
     if (day.atestado) { atestadoDays += 1; continue; }
 
     // Cada projeto do dia já vem com todos os centros/operações juntos — não
@@ -177,6 +189,9 @@ function exportDailyPeriodToExcel(period: DailyPeriod, displayName: string) {
   }
   if (atestadoDays > 0) {
     rows.push(["", competencia, displayName, "Atestado", "", "", "", "", atestadoDays]);
+  }
+  if (dayOffDays > 0) {
+    rows.push(["", competencia, displayName, "Day Off", "", "", "", "", dayOffDays]);
   }
 
   const worksheet = XLSX.utils.aoa_to_sheet(rows);
@@ -389,6 +404,8 @@ function DayRow({
   day,
   disabled,
   projectCatalog = [],
+  isBirthdayMonth,
+  dayOffDayId,
   onPatch,
   onAddItem,
   onEditGroup,
@@ -397,7 +414,9 @@ function DayRow({
   day: DailyDay;
   disabled: boolean;
   projectCatalog?: ProjectCatalogEntry[];
-  onPatch: (dayId: number, body: { atestado?: boolean; holidayOverride?: boolean }) => void;
+  isBirthdayMonth: boolean;
+  dayOffDayId: number | null;
+  onPatch: (dayId: number, body: { atestado?: boolean; dayOff?: boolean; holidayOverride?: boolean }) => void;
   onAddItem: (dayId: number, units: Unit[], projectName: string, operations: OperationTag[] | undefined, general: boolean) => void;
   onEditGroup: (dayId: number, oldItemIds: number[], units: Unit[], projectName: string, operations: OperationTag[] | undefined, general: boolean) => void;
   onRemoveGroup: (itemIds: number[]) => void;
@@ -435,10 +454,25 @@ function DayRow({
               <Stethoscope size={12} />Atestado
             </label>
           )}
+          {day.isBusinessDay && isBirthdayMonth && (
+            <label
+              className={`flex items-center gap-1.5 text-xs ${disabled ? "text-[#c0c0c8]" : "text-[#71717a] cursor-pointer"}`}
+              title="Day off de aniversário — só um dia por mês"
+            >
+              <input
+                type="checkbox"
+                checked={day.dayOff}
+                disabled={disabled || (dayOffDayId !== null && dayOffDayId !== day.id)}
+                onChange={(e) => onPatch(day.id, { dayOff: e.target.checked })}
+                className="accent-pink-500"
+              />
+              🎂 Day off
+            </label>
+          )}
         </div>
       </div>
 
-      {day.isBusinessDay && !day.atestado && (
+      {day.isBusinessDay && !day.atestado && !day.dayOff && (
         <div className="mt-2.5 space-y-1.5">
           {groupDayItems(day.items).map((group) =>
             editingProject === group.projectName ? (
@@ -474,6 +508,7 @@ function DayRow({
       )}
 
       {day.atestado && <p className="mt-2 text-xs text-[#a1a1aa]">Dia registrado como atestado.</p>}
+      {day.dayOff && <p className="mt-2 text-xs text-pink-600">🎂 Dia registrado como day off de aniversário.</p>}
     </div>
   );
 }
@@ -538,10 +573,13 @@ function MonthOverviewRow({ day, onOpen }: { day: DailyDay; onOpen: () => void }
       {day.isBusinessDay && day.atestado && (
         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 shrink-0">Atestado</span>
       )}
-      {day.isBusinessDay && !day.atestado && day.items.length === 0 && (
+      {day.isBusinessDay && day.dayOff && (
+        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-pink-50 text-pink-600 shrink-0">🎂 Day off</span>
+      )}
+      {day.isBusinessDay && !day.atestado && !day.dayOff && day.items.length === 0 && (
         <span className="text-xs text-[#c0c0c8]">Sem lançamentos</span>
       )}
-      {day.isBusinessDay && !day.atestado && day.items.length > 0 && (
+      {day.isBusinessDay && !day.atestado && !day.dayOff && day.items.length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
           {groupDayItems(day.items).map((group) => (
             <span key={group.projectName} className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#f1f1f3] text-[#71717a] shrink-0">
@@ -557,7 +595,7 @@ function MonthOverviewRow({ day, onOpen }: { day: DailyDay; onOpen: () => void }
 
 // ─── Tela principal ───────────────────────────────────────────────────────────
 
-export default function DailyRateio({ displayName }: { displayName: string }) {
+export default function DailyRateio({ displayName, birthDate }: { displayName: string; birthDate?: string }) {
   const now = new Date();
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<DailyPeriod | null>(null);
@@ -592,7 +630,7 @@ export default function DailyRateio({ displayName }: { displayName: string }) {
       .catch((e) => alert(e.message));
   };
 
-  const patchDay = (dayId: number, body: { atestado?: boolean; holidayOverride?: boolean }) => {
+  const patchDay = (dayId: number, body: { atestado?: boolean; dayOff?: boolean; holidayOverride?: boolean }) => {
     if (!period) return;
     apiPatch(`/daily/days/${dayId}`, body)
       .then((updated: DailyDay) => {
@@ -705,7 +743,17 @@ export default function DailyRateio({ displayName }: { displayName: string }) {
             </button>
           </div>
           <DayNavigator days={viewing.days} index={idx} defaultIndex={defIdx} onChange={setViewingDayIndex} />
-          <DayRow key={viewing.days[idx].id} day={viewing.days[idx]} disabled onPatch={() => {}} onAddItem={() => {}} onEditGroup={() => {}} onRemoveGroup={() => {}} />
+          <DayRow
+            key={viewing.days[idx].id}
+            day={viewing.days[idx]}
+            disabled
+            isBirthdayMonth={isBirthdayPeriod(birthDate, viewing.month)}
+            dayOffDayId={viewing.days.find((d) => d.dayOff)?.id ?? null}
+            onPatch={() => {}}
+            onAddItem={() => {}}
+            onEditGroup={() => {}}
+            onRemoveGroup={() => {}}
+          />
         </div>
       </div>
     );
@@ -748,7 +796,9 @@ export default function DailyRateio({ displayName }: { displayName: string }) {
   }
 
   const businessDays = period.days.filter((d) => d.isBusinessDay);
-  const workedDays = businessDays.filter((d) => d.atestado || d.items.length > 0).length;
+  const workedDays = businessDays.filter((d) => d.atestado || d.dayOff || d.items.length > 0).length;
+  const periodIsBirthdayMonth = isBirthdayPeriod(birthDate, period.month);
+  const dayOffDayId = period.days.find((d) => d.dayOff)?.id ?? null;
   const atestadoDays = businessDays.filter((d) => d.atestado).length;
   const pendingDays = businessDays.length - workedDays;
   const idx = Math.min(dayIndex, period.days.length - 1);
@@ -833,6 +883,8 @@ export default function DailyRateio({ displayName }: { displayName: string }) {
               day={period.days[idx]}
               disabled={false}
               projectCatalog={projectCatalog}
+              isBirthdayMonth={periodIsBirthdayMonth}
+              dayOffDayId={dayOffDayId}
               onPatch={patchDay}
               onAddItem={addItem}
               onEditGroup={editGroup}
