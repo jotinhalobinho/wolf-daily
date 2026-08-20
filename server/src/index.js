@@ -8,6 +8,7 @@ const cors = require("cors");
 require("dotenv").config();
 
 const db = require("./db");
+const { runMigrations } = require("./migrate");
 
 const authRoutes = require("./routes/auth");
 const usersRoutes = require("./routes/users");
@@ -67,6 +68,14 @@ async function start() {
     console.error("\n  [ERRO] Não foi possível conectar ao banco de dados.");
     console.error("  Confira as variáveis DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME no .env.");
     console.error("  Detalhe:", detail || err, "\n");
+    process.exit(1);
+  }
+
+  try {
+    await runMigrations();
+  } catch (err) {
+    console.error("\n  [ERRO] Falha ao atualizar a estrutura do banco de dados (migração automática).");
+    console.error("  Detalhe:", err.message || err, "\n");
     process.exit(1);
   }
 

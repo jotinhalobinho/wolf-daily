@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS collaborators (
   id         VARCHAR(64) PRIMARY KEY,
   name       VARCHAR(255) NOT NULL,
   role       VARCHAR(100) NOT NULL,
+  birth_date DATE NULL,
   salary     DECIMAL(12,2) NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -113,7 +114,7 @@ CREATE TABLE IF NOT EXISTS daily_days (
 CREATE TABLE IF NOT EXISTS daily_day_items (
   id           INT AUTO_INCREMENT PRIMARY KEY,
   day_id       INT NOT NULL,
-  unit         ENUM('wolf','fraga','woncred','profit') NOT NULL,
+  unit         ENUM('wolf','fraga','woncred','profit','geral') NOT NULL,
   project_name VARCHAR(255) NOT NULL,
   operations   VARCHAR(255) NULL,
   CONSTRAINT fk_day_items_day

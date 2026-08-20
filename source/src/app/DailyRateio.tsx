@@ -12,9 +12,13 @@ import {
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
+// "geral" = demanda que não precisa ser lançada num centro de custo
+// específico (vira "Demandas Gerais" quando sugerida pro Rateio Mensal).
+export type DailyUnit = Unit | "geral";
+
 interface DailyItem {
   id: number;
-  unit: Unit;
+  unit: DailyUnit;
   projectName: string;
   operations?: OperationTag[];
 }
@@ -56,22 +60,25 @@ interface ProjectCatalogEntry {
 interface GroupedEntry {
   projectName: string;
   units: Unit[];
+  general: boolean;
   operations: OperationTag[];
   itemIds: number[];
 }
 
 function groupDayItems(items: DailyItem[]): GroupedEntry[] {
-  const byProject = new Map<string, { units: Set<Unit>; operations: Set<OperationTag>; itemIds: number[] }>();
+  const byProject = new Map<string, { units: Set<Unit>; general: boolean; operations: Set<OperationTag>; itemIds: number[] }>();
   for (const item of items) {
     let g = byProject.get(item.projectName);
-    if (!g) { g = { units: new Set(), operations: new Set(), itemIds: [] }; byProject.set(item.projectName, g); }
-    g.units.add(item.unit);
+    if (!g) { g = { units: new Set(), general: false, operations: new Set(), itemIds: [] }; byProject.set(item.projectName, g); }
+    if (item.unit === "geral") g.general = true;
+    else g.units.add(item.unit);
     g.itemIds.push(item.id);
     if (item.unit === "fraga" && item.operations) item.operations.forEach((tag) => g!.operations.add(tag));
   }
   return [...byProject.entries()].map(([projectName, g]) => ({
     projectName,
     units: UNITS.filter((u) => g.units.has(u)),
+    general: g.general,
     operations: OPERATION_TAG_ORDER.filter((t) => g.operations.has(t)),
     itemIds: g.itemIds,
   }));
@@ -114,9 +121,10 @@ function defaultDayIndex(days: DailyDay[]) {
 
 // ─── Exportação para Excel ────────────────────────────────────────────────────
 
-// Se todos os centros de custo foram marcados, mostra "Todos"; senão lista os
-// que foram usados (ex: "Wolf Vendas + Profit").
-function unitsToExportText(units: Unit[]): string {
+// "Geral" quando não tem centro de custo; se todos foram marcados, mostra
+// "Todos"; senão lista os que foram usados (ex: "Wolf Vendas + Profit").
+function unitsToExportText(units: Unit[], general: boolean): string {
+  if (general) return "Geral";
   if (units.length >= UNITS.length) return "Todos";
   return units.map((u) => UNIT_EXPORT_NAMES[u]).join(" + ");
 }
@@ -139,7 +147,7 @@ function exportDailyPeriodToExcel(period: DailyPeriod, displayName: string) {
     "HORAS/DIAS",
   ];
 
-  const totals = new Map<string, { projectName: string; units: Unit[]; operations: OperationTag[]; days: number }>();
+  const totals = new Map<string, { projectName: string; units: Unit[]; general: boolean; operations: OperationTag[]; days: number }>();
   let atestadoDays = 0;
 
   for (const day of period.days) {
@@ -153,17 +161,17 @@ function exportDailyPeriodToExcel(period: DailyPeriod, displayName: string) {
     if (groups.length === 0) continue;
     const share = 1 / groups.length;
     for (const g of groups) {
-      const key = `${g.projectName}|${g.units.join(",")}|${g.operations.join(",")}`;
+      const key = `${g.projectName}|${g.units.join(",")}|${g.general}|${g.operations.join(",")}`;
       const existing = totals.get(key);
       if (existing) existing.days += share;
-      else totals.set(key, { projectName: g.projectName, units: g.units, operations: g.operations, days: share });
+      else totals.set(key, { projectName: g.projectName, units: g.units, general: g.general, operations: g.operations, days: share });
     }
   }
 
   const rows: (string | number)[][] = [header];
   for (const t of totals.values()) {
     t.days = Math.round(t.days * 100) / 100;
-    const empresaText = unitsToExportText(t.units);
+    const empresaText = unitsToExportText(t.units, t.general);
     const operacaoText = t.units.includes("fraga") ? operationsToExportText(t.operations) : "";
     rows.push(["", competencia, displayName, t.projectName, empresaText, "", operacaoText, "", t.days]);
   }
@@ -187,6 +195,7 @@ function ProjectEntryForm({
   projectCatalog,
   initialName = "",
   initialUnits = [],
+  initialGeneral = false,
   initialOperations = [],
   submitLabel = "Adicionar",
   onSubmit,
@@ -195,23 +204,33 @@ function ProjectEntryForm({
   projectCatalog: ProjectCatalogEntry[];
   initialName?: string;
   initialUnits?: Unit[];
+  initialGeneral?: boolean;
   initialOperations?: OperationTag[];
   submitLabel?: string;
-  onSubmit: (units: Unit[], projectName: string, operations?: OperationTag[]) => void;
+  onSubmit: (units: Unit[], projectName: string, operations: OperationTag[] | undefined, general: boolean) => void;
   onCancel?: () => void;
 }) {
   const [name, setName] = useState(initialName);
   const [units, setUnits] = useState<Unit[]>(initialUnits);
+  const [general, setGeneral] = useState(initialGeneral);
   const [operations, setOperations] = useState<OperationTag[]>(initialOperations);
 
   const allSelected = units.length === UNITS.length;
 
+  const toggleGeneral = () => {
+    setGeneral((g) => !g);
+    setUnits([]);
+    setOperations([]);
+  };
+
   const toggleUnit = (u: Unit) => {
+    setGeneral(false);
     setUnits((prev) => (prev.includes(u) ? prev.filter((x) => x !== u) : [...prev, u]));
     if (u === "fraga") setOperations([]);
   };
 
   const toggleAll = () => {
+    setGeneral(false);
     if (allSelected) { setUnits([]); setOperations([]); }
     else setUnits([...UNITS]);
   };
@@ -220,20 +239,21 @@ function ProjectEntryForm({
   // pra não ter que marcar tudo de novo toda vez que repetir o mesmo projeto.
   const handleNameChange = (value: string) => {
     setName(value);
-    if (units.length === 0) {
+    if (units.length === 0 && !general) {
       const known = projectCatalog.find((p) => p.name.toLowerCase() === value.trim().toLowerCase());
       if (known && known.units.length > 0) setUnits(known.units);
     }
   };
 
-  const valid = name.trim().length > 0 && units.length > 0 && (!units.includes("fraga") || operations.length > 0);
+  const valid = name.trim().length > 0 && (general || units.length > 0) && (!units.includes("fraga") || operations.length > 0);
 
   const submit = () => {
     if (!valid) return;
-    onSubmit(units, name.trim(), units.includes("fraga") ? operations : undefined);
+    onSubmit(units, name.trim(), units.includes("fraga") ? operations : undefined, general);
     if (!onCancel) {
       setName("");
       setUnits([]);
+      setGeneral(false);
       setOperations([]);
     }
   };
@@ -255,6 +275,17 @@ function ProjectEntryForm({
       <div>
         <label className="block text-[9px] font-semibold uppercase tracking-wider text-[#a1a1aa] mb-1">Centro de custo</label>
         <div className="flex items-center gap-1 flex-wrap">
+          <button
+            type="button"
+            onClick={toggleGeneral}
+            title="Demanda que não precisa ser lançada num centro de custo específico"
+            className="h-6 px-2 rounded-md text-[10px] font-semibold border border-dashed transition-all"
+            style={general
+              ? { backgroundColor: "#71717a", borderColor: "#71717a", color: "#fff" }
+              : { backgroundColor: "#fff", borderColor: "rgba(0,0,0,0.2)", color: "#71717a" }}
+          >
+            Geral
+          </button>
           <button
             type="button"
             onClick={toggleAll}
@@ -324,6 +355,9 @@ function ItemGroupRow({
     <div className="flex items-center gap-2 group">
       <span className="text-xs flex-1 truncate">{group.projectName}</span>
       <div className="flex items-center gap-1 flex-wrap justify-end shrink-0">
+        {group.general && (
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f1f1f3] text-[#71717a]">Geral</span>
+        )}
         {group.units.map((u) => (
           <span key={u} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f1f1f3]" style={{ color: UNIT_COLORS[u] }}>
             {UNIT_NAMES[u]}
@@ -364,8 +398,8 @@ function DayRow({
   disabled: boolean;
   projectCatalog?: ProjectCatalogEntry[];
   onPatch: (dayId: number, body: { atestado?: boolean; holidayOverride?: boolean }) => void;
-  onAddItem: (dayId: number, units: Unit[], projectName: string, operations?: OperationTag[]) => void;
-  onEditGroup: (dayId: number, oldItemIds: number[], units: Unit[], projectName: string, operations?: OperationTag[]) => void;
+  onAddItem: (dayId: number, units: Unit[], projectName: string, operations: OperationTag[] | undefined, general: boolean) => void;
+  onEditGroup: (dayId: number, oldItemIds: number[], units: Unit[], projectName: string, operations: OperationTag[] | undefined, general: boolean) => void;
   onRemoveGroup: (itemIds: number[]) => void;
 }) {
   const [editingProject, setEditingProject] = useState<string | null>(null);
@@ -413,11 +447,12 @@ function DayRow({
                 projectCatalog={projectCatalog}
                 initialName={group.projectName}
                 initialUnits={group.units}
+                initialGeneral={group.general}
                 initialOperations={group.operations}
                 submitLabel="Salvar"
                 onCancel={() => setEditingProject(null)}
-                onSubmit={(units, name, ops) => {
-                  onEditGroup(day.id, group.itemIds, units, name, ops);
+                onSubmit={(units, name, ops, general) => {
+                  onEditGroup(day.id, group.itemIds, units, name, ops, general);
                   setEditingProject(null);
                 }}
               />
@@ -432,7 +467,7 @@ function DayRow({
             )
           )}
           {!disabled && editingProject === null && (
-            <ProjectEntryForm projectCatalog={projectCatalog} onSubmit={(units, name, ops) => onAddItem(day.id, units, name, ops)} />
+            <ProjectEntryForm projectCatalog={projectCatalog} onSubmit={(units, name, ops, general) => onAddItem(day.id, units, name, ops, general)} />
           )}
           {disabled && day.items.length === 0 && <p className="text-xs text-[#c0c0c8]">Sem lançamentos</p>}
         </div>
@@ -566,15 +601,17 @@ export default function DailyRateio({ displayName }: { displayName: string }) {
       .catch((e) => alert(e.message));
   };
 
-  const addItem = (dayId: number, units: Unit[], projectName: string, operations?: OperationTag[]) => {
+  const addItem = (dayId: number, units: Unit[], projectName: string, operations: OperationTag[] | undefined, general: boolean) => {
     if (!period) return;
+    const unitList: DailyUnit[] = general ? ["geral"] : units;
     Promise.all(
-      units.map((unit) =>
+      unitList.map((unit) =>
         apiPost(`/daily/days/${dayId}/items`, { unit, projectName, operations: unit === "fraga" ? operations : undefined })
       )
     )
       .then((items: DailyItem[]) => {
         setPeriod((p) => p ? { ...p, days: p.days.map((d) => d.id === dayId ? { ...d, items: [...d.items, ...items] } : d) } : p);
+        if (general) return;
         setProjectCatalog((c) => {
           const idx = c.findIndex((p) => p.name === projectName);
           if (idx === -1) {
@@ -600,12 +637,13 @@ export default function DailyRateio({ displayName }: { displayName: string }) {
 
   // Editar um lançamento já salvo = trocar todos os itens antigos do projeto
   // (um por centro de custo) pelos novos, com o nome/centros/operação atualizados.
-  const editGroup = (dayId: number, oldItemIds: number[], units: Unit[], projectName: string, operations?: OperationTag[]) => {
+  const editGroup = (dayId: number, oldItemIds: number[], units: Unit[], projectName: string, operations: OperationTag[] | undefined, general: boolean) => {
     if (!period) return;
+    const unitList: DailyUnit[] = general ? ["geral"] : units;
     Promise.all(oldItemIds.map((id) => apiDelete(`/daily/items/${id}`)))
       .then(() =>
         Promise.all(
-          units.map((unit) =>
+          unitList.map((unit) =>
             apiPost(`/daily/days/${dayId}/items`, { unit, projectName, operations: unit === "fraga" ? operations : undefined })
           )
         )
@@ -617,6 +655,7 @@ export default function DailyRateio({ displayName }: { displayName: string }) {
             ? { ...d, items: [...d.items.filter((it) => !oldItemIds.includes(it.id)), ...newItems] }
             : d),
         } : p);
+        if (general) return;
         setProjectCatalog((c) => {
           const idx = c.findIndex((p) => p.name === projectName);
           if (idx === -1) {

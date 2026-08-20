@@ -23,6 +23,9 @@ interface Collaborator {
   name: string;
   role: string;
   salary: number;
+  // Opcional — "YYYY-MM-DD". Usado só pra saber o mês do aniversário (o dia
+  // off do mês do aniversário é descontado automaticamente do Rateio Mensal).
+  birthDate?: string;
 }
 
 interface UnitProject {
@@ -160,10 +163,21 @@ const entryTotal = (e: RateioEntry) =>
 const atestadoTotal = (e: RateioEntry) =>
   (e.atestados ?? []).reduce((s, p) => s + p.days, 0);
 
+// O colaborador aniversariante no mês do período ganha 1 dia de folga (day
+// off), descontado do total de dias que precisa distribuir nesse rateio.
+// release.month é 0-indexado (0 = Janeiro), igual ao mês extraído de "YYYY-MM-DD".
+const isBirthdayMonth = (collaborator: Collaborator | undefined, releaseMonth: number) => {
+  const birthDate = collaborator?.birthDate;
+  if (!birthDate) return false;
+  const month = Number(birthDate.split("-")[1]) - 1;
+  return month === releaseMonth;
+};
+
 // Total de dias que o colaborador precisa distribuir para "completar" o
-// período: os dias úteis do período menos os dias de atestado lançados.
-const requiredDays = (workingDays: number, e: RateioEntry) =>
-  Math.max(0, workingDays - atestadoTotal(e));
+// período: os dias úteis do período menos os dias de atestado lançados e,
+// se for o mês do aniversário dele, menos 1 dia de folga.
+const requiredDays = (workingDays: number, e: RateioEntry, birthdayOff = false) =>
+  Math.max(0, workingDays - atestadoTotal(e) - (birthdayOff ? 1 : 0));
 
 const blankEntry = (collaboratorId: string): RateioEntry => ({
   collaboratorId,
@@ -337,6 +351,7 @@ function CollaboratorForm({ initial, workingDays, onSave, onCancel }: Collaborat
   const [name, setName] = useState(initial?.name ?? "");
   const [role, setRole] = useState(initial?.role ?? "");
   const [salary, setSalary] = useState(initial?.salary?.toString() ?? "");
+  const [birthDate, setBirthDate] = useState(initial?.birthDate ?? "");
   const salaryNum = parseFloat(salary.replace(",", ".")) || 0;
   const daily = workingDays > 0 ? salaryNum / workingDays : 0;
   const valid = name.trim() && role.trim() && salaryNum > 0;
@@ -364,10 +379,18 @@ function CollaboratorForm({ initial, workingDays, onSave, onCancel }: Collaborat
             {daily > 0 ? fmt(daily) : "—"}
           </div>
         </div>
+        <div>
+          <label className="block text-xs font-medium text-[#71717a] mb-1.5">Aniversário (opcional)</label>
+          <input type="date" className="w-full h-8 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} style={{ fontFamily: "var(--font-mono)" }} />
+          <p className="text-[10px] text-[#a1a1aa] mt-1">No mês do aniversário, 1 dia é descontado automaticamente do Rateio Mensal (day off).</p>
+        </div>
       </div>
       <div className="flex items-center justify-end gap-2 pt-1">
         <button onClick={onCancel} className="h-8 px-4 text-sm text-[#71717a] hover:text-[#18181b] rounded-lg hover:bg-[#f4f4f6] transition-all">Cancelar</button>
-        <button onClick={() => valid && onSave({ name: name.trim(), role: role.trim(), salary: salaryNum })} disabled={!valid} className="h-8 px-4 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] disabled:opacity-40 disabled:cursor-not-allowed transition-all">Salvar</button>
+        {/* birthDate vai como "" (não undefined) quando limpo, pra garantir que o
+            JSON enviado ao servidor tenha a chave e ele saiba que é pra apagar
+            a data — undefined simplesmente some do corpo da requisição. */}
+        <button onClick={() => valid && onSave({ name: name.trim(), role: role.trim(), salary: salaryNum, birthDate })} disabled={!valid} className="h-8 px-4 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] disabled:opacity-40 disabled:cursor-not-allowed transition-all">Salvar</button>
       </div>
     </div>
   );
@@ -645,8 +668,9 @@ function AdminRateio({ releases, setReleases, collaborators, workingDays }: Admi
           <div className="space-y-3">
             {[...releases].reverse().map((r) => {
               const total = r.entries.reduce((s, e) => s + entryTotal(e), 0);
-              const done = r.entries.filter((e) => entryTotal(e) === requiredDays(r.workingDays, e)).length;
-              const totalPossible = r.entries.reduce((s, e) => s + requiredDays(r.workingDays, e), 0);
+              const targetFor = (e: RateioEntry) => requiredDays(r.workingDays, e, isBirthdayMonth(collaborators.find((c) => c.id === e.collaboratorId), r.month));
+              const done = r.entries.filter((e) => entryTotal(e) === targetFor(e)).length;
+              const totalPossible = r.entries.reduce((s, e) => s + targetFor(e), 0);
               return (
                 <button key={r.id} onClick={() => setSelectedId(r.id)} className="w-full bg-white border border-[rgba(0,0,0,0.07)] rounded-xl px-5 py-4 text-left hover:border-[rgba(0,0,0,0.14)] hover:shadow-sm transition-all flex items-center gap-4">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${r.status === "approved" ? "bg-emerald-50" : "bg-blue-50"}`}>
@@ -767,7 +791,10 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
     }, 0),
   }));
   const totalRateado = unitTotals.reduce((s, u) => s + u.valor, 0);
-  const allComplete = release.entries.every((e) => entryTotal(e) === requiredDays(release.workingDays, e));
+  const allComplete = release.entries.every((e) => {
+    const c = collaborators.find((x) => x.id === e.collaboratorId);
+    return entryTotal(e) === requiredDays(release.workingDays, e, isBirthdayMonth(c, release.month));
+  });
 
   return (
     <div className="flex-1 flex overflow-hidden">
@@ -818,7 +845,8 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
                 {collaborators.map((c) => {
                   const entry = release.entries.find((e) => e.collaboratorId === c.id) ?? blankEntry(c.id);
                   const total = entryTotal(entry);
-                  const target = requiredDays(release.workingDays, entry);
+                  const birthdayOff = isBirthdayMonth(c, release.month);
+                  const target = requiredDays(release.workingDays, entry, birthdayOff);
                   const rate = dailyRate(c.salary, release.workingDays);
                   const isExpanded = expandedId === c.id;
                   return (
@@ -839,6 +867,9 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
                                 )}
                                 {atestadoTotal(entry) > 0 && (
                                   <span className="text-[9px] font-medium px-1 py-0.5 bg-amber-50 text-amber-600 rounded">atestado {atestadoTotal(entry)}d</span>
+                                )}
+                                {birthdayOff && (
+                                  <span className="text-[9px] font-medium px-1 py-0.5 bg-pink-50 text-pink-600 rounded">🎂 aniversário: -1d</span>
                                 )}
                               </div>
                               <p className="text-[11px] text-[#a1a1aa] leading-tight">{c.role}</p>
@@ -1068,7 +1099,7 @@ function CollaboratorRateio({ releases, setReleases, collaborator, workingDays }
               {openReleases.map((r) => {
                 const entry = r.entries.find((e) => e.collaboratorId === collaborator.id) ?? blankEntry(collaborator.id);
                 const total = entryTotal(entry);
-                const target = requiredDays(r.workingDays, entry);
+                const target = requiredDays(r.workingDays, entry, isBirthdayMonth(collaborator, r.month));
                 return (
                   <button key={r.id} onClick={() => setSelectedId(r.id)} className="w-full flex items-center justify-between bg-white rounded-lg px-4 py-2.5 text-left hover:shadow-sm transition-all border border-blue-100">
                     <div>
@@ -1092,7 +1123,7 @@ function CollaboratorRateio({ releases, setReleases, collaborator, workingDays }
           {allReleases.map((r) => {
             const entry = r.entries.find((e) => e.collaboratorId === collaborator.id) ?? blankEntry(collaborator.id);
             const total = entryTotal(entry);
-            const target = requiredDays(r.workingDays, entry);
+            const target = requiredDays(r.workingDays, entry, isBirthdayMonth(collaborator, r.month));
             return (
               <button key={r.id} onClick={() => setSelectedId(r.id)} className="w-full bg-white border border-[rgba(0,0,0,0.07)] rounded-xl px-5 py-3.5 text-left hover:border-[rgba(0,0,0,0.14)] transition-all flex items-center gap-3">
                 <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${r.status === "approved" ? "bg-emerald-50" : "bg-blue-50"}`}>
@@ -1130,11 +1161,13 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
     atestados: initialEntry.atestados ?? [],
   });
   const [savedFlash, setSavedFlash] = useState(false);
+  const [fillingFromDaily, setFillingFromDaily] = useState(false);
   const isLocked = release.status === "approved";
 
   const total = entryTotal(draft);
-  // Dias de atestado reduzem o total exigido para completar o rateio.
-  const target = requiredDays(release.workingDays, draft);
+  const birthdayOff = isBirthdayMonth(collaborator, release.month);
+  // Dias de atestado (e o day off de aniversário, se for o mês) reduzem o total exigido para completar o rateio.
+  const target = requiredDays(release.workingDays, draft, birthdayOff);
   const remaining = target - total;
 
   const setUnitProjects = (u: Unit, projects: UnitProject[]) => {
@@ -1144,6 +1177,27 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
   const save = () => {
     onSave({ ...draft, submitted: true });
     setSavedFlash(true);
+  };
+
+  // Busca o que já foi lançado no Rateio Diário nesse mesmo mês/ano e
+  // preenche os projetos por centro de custo automaticamente — evita
+  // digitar tudo de novo pra quem já vem lançando dia a dia. Só sugere, não
+  // salva nada sozinho: o colaborador ainda revisa e clica em "Salvar Rateio".
+  const fillFromDaily = () => {
+    if (total > 0 || atestadoTotal(draft) > 0) {
+      if (!window.confirm("Isso vai substituir os projetos já preenchidos aqui pelo que está lançado no Rateio Diário deste mês. Continuar?")) return;
+    }
+    setFillingFromDaily(true);
+    apiGet(`/releases/${release.id}/entries/${collaborator.id}/daily-suggestion`)
+      .then((s: { found: boolean; unitProjects: Record<Unit, UnitProject[]>; generalProjects: UnitProject[]; atestados: UnitProject[] }) => {
+        if (!s.found) {
+          alert("Nenhum lançamento encontrado no Rateio Diário para este mês.");
+          return;
+        }
+        setDraft((d) => ({ ...d, unitProjects: s.unitProjects, generalProjects: s.generalProjects, atestados: s.atestados }));
+      })
+      .catch((e) => alert(e.message))
+      .finally(() => setFillingFromDaily(false));
   };
 
   return (
@@ -1161,9 +1215,19 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
             </p>
           </div>
           {!isLocked && (
-            <button onClick={save} className={`h-8 px-4 text-sm font-medium rounded-lg transition-all flex items-center gap-1.5 ${savedFlash ? "bg-emerald-500 text-white" : "bg-[#18181b] text-white hover:bg-[#27272a]"}`}>
-              {savedFlash ? <><Check size={13} />Salvo!</> : <><Send size={13} />Salvar Rateio</>}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={fillFromDaily}
+                disabled={fillingFromDaily}
+                title="Preenche os projetos abaixo com o que já foi lançado no Rateio Diário deste mês"
+                className="h-8 px-3.5 text-sm font-medium bg-white border border-[rgba(0,0,0,0.1)] rounded-lg hover:border-[rgba(0,0,0,0.2)] transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Zap size={13} />{fillingFromDaily ? "Buscando…" : "Preencher com o diário"}
+              </button>
+              <button onClick={save} className={`h-8 px-4 text-sm font-medium rounded-lg transition-all flex items-center gap-1.5 ${savedFlash ? "bg-emerald-500 text-white" : "bg-[#18181b] text-white hover:bg-[#27272a]"}`}>
+                {savedFlash ? <><Check size={13} />Salvo!</> : <><Send size={13} />Salvar Rateio</>}
+              </button>
+            </div>
           )}
         </div>
 
@@ -1180,6 +1244,9 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
                 <p className="text-[10px] text-amber-600 mt-0.5">
                   {release.workingDays} dias úteis − {atestadoTotal(draft)} dia(s) de atestado
                 </p>
+              )}
+              {birthdayOff && (
+                <p className="text-[10px] text-pink-600 mt-0.5">🎂 Aniversário este mês − 1 dia de folga (day off)</p>
               )}
             </div>
             <div className="flex items-center gap-4">
@@ -1963,6 +2030,7 @@ function ColaboradoresView({ collaborators, setCollaborators, workingDays }: Col
               <tr className="border-b border-[rgba(0,0,0,0.06)]">
                 <th className="text-left px-5 py-3 text-xs font-medium text-[#71717a]">Nome</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-[#71717a]">Cargo</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-[#71717a]">Aniversário</th>
                 <th className="text-right px-5 py-3 text-xs font-medium text-[#71717a]">Salário</th>
                 <th className="text-right px-5 py-3 text-xs font-medium text-[#71717a]">Valor/Dia</th>
                 <th className="px-5 py-3 w-20" />
@@ -1974,6 +2042,7 @@ function ColaboradoresView({ collaborators, setCollaborators, workingDays }: Col
                   <tr key={c.id} className="border-b border-[rgba(0,0,0,0.04)] last:border-0 group">
                     <td className="px-5 py-3"><div className="flex items-center gap-2.5"><Avatar name={c.name} /><span className="text-sm font-medium">{c.name}</span></div></td>
                     <td className="px-5 py-3 text-sm text-[#71717a]">{c.role}</td>
+                    <td className="px-5 py-3 text-xs text-[#71717a]" style={{ fontFamily: "var(--font-mono)" }}>{c.birthDate ? fmtDate(c.birthDate) : "—"}</td>
                     <td className="px-5 py-3 text-right text-sm tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmt(c.salary)}</td>
                     <td className="px-5 py-3 text-right text-xs tabular-nums text-[#a1a1aa]" style={{ fontFamily: "var(--font-mono)" }}>{fmt(dailyRate(c.salary, workingDays))}</td>
                     <td className="px-5 py-3">
@@ -1989,7 +2058,7 @@ function ColaboradoresView({ collaborators, setCollaborators, workingDays }: Col
                   </tr>
                   {editId === c.id && (
                     <tr key={`edit-${c.id}`}>
-                      <td colSpan={5} className="px-5 pb-3">
+                      <td colSpan={6} className="px-5 pb-3">
                         <CollaboratorForm initial={c} workingDays={workingDays} onSave={(d) => {
                           setCollaborators((p) => p.map((x) => x.id === c.id ? { ...x, ...d } : x));
                           setEditId(null);
@@ -2135,7 +2204,7 @@ function DashboardView({ collaborators, releases, projects, workingDays, role, c
             <h3 className="text-sm font-semibold mb-4">Períodos Recentes</h3>
             <div className="space-y-2">
               {[...releases].reverse().slice(0, 5).map((r) => {
-                const done = r.entries.filter((e) => entryTotal(e) === requiredDays(r.workingDays, e)).length;
+                const done = r.entries.filter((e) => entryTotal(e) === requiredDays(r.workingDays, e, isBirthdayMonth(collaborators.find((c) => c.id === e.collaboratorId), r.month))).length;
                 return (
                   <div key={r.id} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">

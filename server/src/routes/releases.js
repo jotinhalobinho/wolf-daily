@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const db = require("../db");
 const asyncHandler = require("../asyncHandler");
 const { requireAuth, requireAdmin } = require("../auth");
+const { buildDailySuggestion } = require("./daily");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -231,6 +232,37 @@ router.put(
 
     const fresh = await db.get("SELECT * FROM rateio_entries WHERE id = ?", [entryRow.id]);
     res.json(await loadEntry(fresh));
+  })
+);
+
+// GET /api/releases/:releaseId/entries/:collaboratorId/daily-suggestion
+// -> sugestão de preenchimento a partir do que já foi lançado no Rateio
+// Diário desse colaborador no mesmo mês/ano do período (não altera nada, só sugere).
+router.get(
+  "/:releaseId/entries/:collaboratorId/daily-suggestion",
+  asyncHandler(async (req, res) => {
+    const { releaseId, collaboratorId } = req.params;
+    const release = await db.get("SELECT * FROM releases WHERE id = ?", [releaseId]);
+    if (!release) return res.status(404).json({ error: "Período não encontrado" });
+
+    const isAdmin = req.user.role === "admin";
+    if (!isAdmin && req.user.collaboratorId !== collaboratorId) {
+      return res.status(403).json({ error: "Você só pode consultar o seu próprio rateio" });
+    }
+
+    const user = await db.get("SELECT id FROM users WHERE collaborator_id = ?", [collaboratorId]);
+    if (!user) {
+      return res.json({
+        found: false,
+        unitProjects: { wolf: [], fraga: [], woncred: [], profit: [] },
+        generalProjects: [],
+        atestados: [],
+      });
+    }
+
+    // releases.month é 0-indexado (0 = Janeiro) na tela; daily_periods.month é 1-indexado.
+    const suggestion = await buildDailySuggestion(user.id, release.month + 1, release.year);
+    res.json(suggestion);
   })
 );
 
