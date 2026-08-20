@@ -58,6 +58,7 @@ async function loadDay(dayRow) {
     holidayOverride: dayRow.holiday_override,
     isBusinessDay: isBusinessDay(dayRow),
     atestado: !!dayRow.atestado,
+    dayOff: !!dayRow.day_off,
     items: items.map((it) => ({
       id: it.id,
       unit: it.unit,
@@ -235,31 +236,59 @@ router.post(
   })
 );
 
-// PATCH /api/daily/days/:dayId  { atestado?, holidayOverride? }
+// PATCH /api/daily/days/:dayId  { atestado?, dayOff?, holidayOverride? }
 router.patch(
   "/days/:dayId",
   asyncHandler(async (req, res) => {
     const day = await findOwnedDay(req.params.dayId, req.user.id);
     if (!day) return res.status(404).json({ error: "Dia não encontrado" });
 
-    const period = await db.get("SELECT status FROM daily_periods WHERE id = ?", [day.period_id]);
+    const period = await db.get("SELECT * FROM daily_periods WHERE id = ?", [day.period_id]);
     if (period.status !== "open") return res.status(403).json({ error: "Este período já foi encerrado" });
 
     const b = req.body || {};
-    const atestado = b.atestado != null ? (b.atestado ? 1 : 0) : day.atestado;
+    let atestado = b.atestado != null ? (b.atestado ? 1 : 0) : day.atestado;
+    let dayOff = b.dayOff != null ? (b.dayOff ? 1 : 0) : day.day_off;
     let holidayOverride = day.holiday_override;
     if (b.holidayOverride != null) {
       if (!day.holiday_name) return res.status(400).json({ error: "Este dia não é feriado" });
       holidayOverride = b.holidayOverride ? 1 : 0;
     }
 
-    await db.run("UPDATE daily_days SET atestado = ?, holiday_override = ? WHERE id = ?", [
+    // Um dia só pode ser uma coisa: marcar um desmarca o outro automaticamente.
+    if (b.atestado != null && atestado) dayOff = 0;
+    if (b.dayOff != null && dayOff) atestado = 0;
+
+    // Day off de aniversário: só no mês do aniversário do colaborador, e só um
+    // dia por período (não pode marcar em mais de um dia do mesmo mês).
+    if (b.dayOff != null && b.dayOff && !day.day_off) {
+      const collaborator = req.user.collaboratorId
+        ? await db.get("SELECT birth_date FROM collaborators WHERE id = ?", [req.user.collaboratorId])
+        : null;
+      if (!collaborator || !collaborator.birth_date) {
+        return res.status(400).json({ error: "Cadastre sua data de aniversário para poder marcar o day off" });
+      }
+      const birthMonth = Number(collaborator.birth_date.split("-")[1]); // "YYYY-MM-DD" -> 1-12, já bate com daily_periods.month
+      if (birthMonth !== period.month) {
+        return res.status(400).json({ error: "O day off de aniversário só pode ser marcado no mês do seu aniversário" });
+      }
+      const already = await db.get("SELECT id FROM daily_days WHERE period_id = ? AND day_off = 1 AND id != ?", [
+        day.period_id,
+        day.id,
+      ]);
+      if (already) {
+        return res.status(400).json({ error: "Você já marcou o day off em outro dia deste mês. Desmarque-o antes de marcar outro." });
+      }
+    }
+
+    await db.run("UPDATE daily_days SET atestado = ?, day_off = ?, holiday_override = ? WHERE id = ?", [
       atestado,
+      dayOff,
       holidayOverride,
       day.id,
     ]);
 
-    if (atestado) {
+    if (atestado || dayOff) {
       await db.run("DELETE FROM daily_day_items WHERE day_id = ?", [day.id]);
     }
 
@@ -324,16 +353,21 @@ async function buildDailySuggestion(userId, month, year) {
     "SELECT * FROM daily_periods WHERE user_id = ? AND month = ? AND year = ?",
     [userId, month, year]
   );
-  if (!period) return { found: false, unitProjects: blankUnitProjects, generalProjects: [], atestados: [] };
+  if (!period) return { found: false, unitProjects: blankUnitProjects, generalProjects: [], atestados: [], dayOffs: [] };
 
   const days = await db.all("SELECT * FROM daily_days WHERE period_id = ? ORDER BY date ASC", [period.id]);
 
   let atestadoDays = 0;
+  let dayOffDays = 0;
   // chave "unit|projeto" -> { unit, projectName, days, operations }
   const totals = new Map();
 
   for (const dayRow of days) {
     if (!isBusinessDay(dayRow)) continue;
+    if (dayRow.day_off) {
+      dayOffDays += 1;
+      continue;
+    }
     if (dayRow.atestado) {
       atestadoDays += 1;
       continue;
@@ -396,7 +430,8 @@ async function buildDailySuggestion(userId, month, year) {
   }
 
   const atestados = atestadoDays > 0 ? [{ name: "Atestado", days: atestadoDays }] : [];
-  return { found: true, unitProjects, generalProjects, atestados };
+  const dayOffs = dayOffDays > 0 ? [{ name: "Day Off", days: dayOffDays }] : [];
+  return { found: true, unitProjects, generalProjects, atestados, dayOffs };
 }
 
 module.exports = router;

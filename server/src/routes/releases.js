@@ -19,6 +19,7 @@ function blankEntry(collaboratorId) {
     unitProjects: { wolf: [], fraga: [], woncred: [], profit: [] },
     generalProjects: [],
     atestados: [],
+    dayOffs: [],
     observations: "",
     submitted: false,
   };
@@ -34,6 +35,7 @@ async function loadEntry(entryRow) {
     unitProjects: { wolf: [], fraga: [], woncred: [], profit: [] },
     generalProjects: [],
     atestados: [],
+    dayOffs: [],
     observations: entryRow.observations || "",
     submitted: !!entryRow.submitted,
   };
@@ -49,6 +51,7 @@ async function loadEntry(entryRow) {
     const p =
       operations && operations.length ? { name: it.name, days: it.days, operations } : { name: it.name, days: it.days };
     if (it.unit === "atestado") entry.atestados.push(p);
+    else if (it.unit === "dayoff") entry.dayOffs.push(p);
     else if (it.unit && UNITS.includes(it.unit)) entry.unitProjects[it.unit].push(p);
     else entry.generalProjects.push(p);
   }
@@ -229,6 +232,13 @@ router.put(
         [entryRow.id, "atestado", String(p.name), Math.max(0, Math.round(Number(p.days) || 0)), null]
       );
     }
+    for (const p of b.dayOffs || []) {
+      if (!p || !p.name) continue;
+      await db.run(
+        "INSERT INTO rateio_entry_items (entry_id, unit, name, days, operations) VALUES (?, ?, ?, ?, ?)",
+        [entryRow.id, "dayoff", String(p.name), Math.max(0, Math.round(Number(p.days) || 0)), null]
+      );
+    }
 
     const fresh = await db.get("SELECT * FROM rateio_entries WHERE id = ?", [entryRow.id]);
     res.json(await loadEntry(fresh));
@@ -257,6 +267,7 @@ router.get(
         unitProjects: { wolf: [], fraga: [], woncred: [], profit: [] },
         generalProjects: [],
         atestados: [],
+        dayOffs: [],
       });
     }
 
