@@ -74,9 +74,12 @@ async function start() {
   try {
     await runMigrations();
   } catch (err) {
-    console.error("\n  [ERRO] Falha ao atualizar a estrutura do banco de dados (migração automática).");
+    // Não derruba o servidor por causa disso: sem essas colunas, só as
+    // funcionalidades novas (aniversário do colaborador / "geral" no rateio
+    // diário) ficam indisponíveis — o resto do sistema continua no ar.
+    console.error("\n  [AVISO] Falha ao rodar a migração automática do banco de dados.");
+    console.error("  As funcionalidades novas (aniversário e 'geral') podem não funcionar até isso ser corrigido.");
     console.error("  Detalhe:", err.message || err, "\n");
-    process.exit(1);
   }
 
   app.listen(PORT, () => {
