@@ -283,7 +283,8 @@ router.post(
     const b = req.body || {};
     const unit = String(b.unit || "");
     const projectName = String(b.projectName || "").trim();
-    if (!UNITS.includes(unit)) return res.status(400).json({ error: "Centro de custo inválido" });
+    // "geral" = demanda que não precisa ser lançada num centro de custo específico.
+    if (!UNITS.includes(unit) && unit !== "geral") return res.status(400).json({ error: "Centro de custo inválido" });
     if (!projectName) return res.status(400).json({ error: "Informe o nome do projeto" });
 
     const info = await db.run(
@@ -312,4 +313,91 @@ router.delete(
   })
 );
 
+// Agrega os lançamentos do Rateio Diário de um usuário num mês/ano no mesmo
+// formato usado pelo Rateio Mensal (dias por projeto, separados por centro de
+// custo) — usado pra sugerir o preenchimento do Rateio Mensal a partir do que
+// já foi lançado dia a dia (ver routes/releases.js). `month` aqui é 1-12,
+// igual à coluna daily_periods.month.
+async function buildDailySuggestion(userId, month, year) {
+  const blankUnitProjects = { wolf: [], fraga: [], woncred: [], profit: [] };
+  const period = await db.get(
+    "SELECT * FROM daily_periods WHERE user_id = ? AND month = ? AND year = ?",
+    [userId, month, year]
+  );
+  if (!period) return { found: false, unitProjects: blankUnitProjects, generalProjects: [], atestados: [] };
+
+  const days = await db.all("SELECT * FROM daily_days WHERE period_id = ? ORDER BY date ASC", [period.id]);
+
+  let atestadoDays = 0;
+  // chave "unit|projeto" -> { unit, projectName, days, operations }
+  const totals = new Map();
+
+  for (const dayRow of days) {
+    if (!isBusinessDay(dayRow)) continue;
+    if (dayRow.atestado) {
+      atestadoDays += 1;
+      continue;
+    }
+
+    const items = await db.all(
+      "SELECT unit, project_name, operations FROM daily_day_items WHERE day_id = ?",
+      [dayRow.id]
+    );
+    if (items.length === 0) continue;
+
+    // Junta os lançamentos do dia por projeto (o mesmo projeto pode ter sido
+    // marcado em mais de um centro de custo no mesmo dia).
+    const byProject = new Map();
+    for (const it of items) {
+      let g = byProject.get(it.project_name);
+      if (!g) {
+        g = { units: new Set(), operations: new Set() };
+        byProject.set(it.project_name, g);
+      }
+      g.units.add(it.unit);
+      if (it.unit === "fraga" && it.operations) {
+        try {
+          JSON.parse(it.operations).forEach((tag) => g.operations.add(tag));
+        } catch {
+          // ignora operações inválidas
+        }
+      }
+    }
+
+    // O dia vale 1: dividido igualmente entre os projetos lançados nele e,
+    // dentro de cada projeto, dividido de novo entre os centros de custo que
+    // ele tocou nesse dia.
+    const share = 1 / byProject.size;
+    for (const [projectName, g] of byProject) {
+      const perUnitShare = share / g.units.size;
+      for (const unit of g.units) {
+        const key = `${unit}|${projectName}`;
+        let entry = totals.get(key);
+        if (!entry) {
+          entry = { unit, projectName, days: 0, operations: new Set() };
+          totals.set(key, entry);
+        }
+        entry.days += perUnitShare;
+        if (unit === "fraga") g.operations.forEach((tag) => entry.operations.add(tag));
+      }
+    }
+  }
+
+  const unitProjects = { wolf: [], fraga: [], woncred: [], profit: [] };
+  const generalProjects = [];
+  for (const entry of totals.values()) {
+    const roundedDays = Math.round(entry.days);
+    if (roundedDays <= 0) continue;
+    const item = { name: entry.projectName, days: roundedDays };
+    if (entry.unit === "fraga" && entry.operations.size > 0) item.operations = [...entry.operations];
+    // "geral" no diário == "Demandas Gerais" no rateio mensal (nenhum centro de custo específico).
+    if (entry.unit === "geral") generalProjects.push(item);
+    else unitProjects[entry.unit].push(item);
+  }
+
+  const atestados = atestadoDays > 0 ? [{ name: "Atestado", days: atestadoDays }] : [];
+  return { found: true, unitProjects, generalProjects, atestados };
+}
+
 module.exports = router;
+module.exports.buildDailySuggestion = buildDailySuggestion;
