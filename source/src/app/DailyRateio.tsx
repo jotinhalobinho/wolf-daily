@@ -180,12 +180,16 @@ function exportDailyPeriodToExcel(period: DailyPeriod, displayName: string) {
   const rows: (string | number)[][] = [header];
   for (const t of totals.values()) {
     t.days = Math.round(t.days * 100) / 100;
-    // "Geral" (demanda sem centro de custo específico) sempre vira uma única
-    // linha — nunca uma por centro de custo — com empresa fixa "Fraga e
-    // Bitello" e a observação "Todas" (ver App.tsx exportReleaseToExcel).
-    const empresaText = t.general ? "Fraga e Bitello" : unitsToExportText(t.units);
-    const obsEmpresaText = t.general ? "Todas" : "";
-    const operacaoText = t.general ? "" : operacaoTextForUnits(t.units, t.operations);
+    // "Geral" (sem centro de custo específico) e qualquer lançamento que
+    // tenha tocado mais de um centro de custo ao mesmo tempo (ex: "Wolf +
+    // Fraga" no mesmo dia) caem na mesma regra: empresa fixa "Fraga e
+    // Bitello", observação "Todas" e operação em branco — só quando é
+    // exatamente UM centro de custo a planilha usa a empresa/operação
+    // específica dele (ver App.tsx exportReleaseToExcel e operacaoTextForUnits).
+    const isTodas = t.general || t.units.length > 1;
+    const empresaText = isTodas ? "Fraga e Bitello" : unitsToExportText(t.units);
+    const obsEmpresaText = isTodas ? "Todas" : "";
+    const operacaoText = isTodas ? "" : operacaoTextForUnits(t.units, t.operations);
     rows.push(["", competencia, displayName, t.projectName, empresaText, obsEmpresaText, operacaoText, "", t.days]);
   }
 
