@@ -131,11 +131,9 @@ function defaultDayIndex(days: DailyDay[]) {
 
 // ─── Exportação para Excel ────────────────────────────────────────────────────
 
-// "Geral" quando não tem centro de custo; se todos foram marcados, mostra
-// "Todos"; senão lista os que foram usados (ex: "Wolf Vendas + Profit").
-function unitsToExportText(units: Unit[], general: boolean): string {
-  if (general) return "Geral";
-  if (units.length >= UNITS.length) return "Todos";
+// Lista os centros de custo usados (ex: "Wolf Vendas + Profit"). "Geral" é
+// tratado à parte no chamador (empresa fixa "Fraga e Bitello" + obs "Todas").
+function unitsToExportText(units: Unit[]): string {
   return units.map((u) => UNIT_EXPORT_NAMES[u]).join(" + ");
 }
 
@@ -182,12 +180,12 @@ function exportDailyPeriodToExcel(period: DailyPeriod, displayName: string) {
   const rows: (string | number)[][] = [header];
   for (const t of totals.values()) {
     t.days = Math.round(t.days * 100) / 100;
-    // "Todos" (todos os 4 centros de custo no mesmo lançamento) é tratado como
-    // Grupo Wolf 360 — a lista "Todos" vira observação, e a operação fica em branco.
-    const isTodos = !t.general && t.units.length >= UNITS.length;
-    const empresaText = isTodos ? "Grupo Wolf 360" : unitsToExportText(t.units, t.general);
-    const obsEmpresaText = isTodos ? "Todos" : "";
-    const operacaoText = isTodos ? "" : operacaoTextForUnits(t.units, t.operations);
+    // "Geral" (demanda sem centro de custo específico) sempre vira uma única
+    // linha — nunca uma por centro de custo — com empresa fixa "Fraga e
+    // Bitello" e a observação "Todas" (ver App.tsx exportReleaseToExcel).
+    const empresaText = t.general ? "Fraga e Bitello" : unitsToExportText(t.units);
+    const obsEmpresaText = t.general ? "Todas" : "";
+    const operacaoText = t.general ? "" : operacaoTextForUnits(t.units, t.operations);
     rows.push(["", competencia, displayName, t.projectName, empresaText, obsEmpresaText, operacaoText, "", t.days]);
   }
 
@@ -227,8 +225,6 @@ function ProjectEntryForm({
   const [general, setGeneral] = useState(initialGeneral);
   const [operations, setOperations] = useState<OperationTag[]>(initialOperations);
 
-  const allSelected = units.length === UNITS.length;
-
   const toggleGeneral = () => {
     setGeneral((g) => !g);
     setUnits([]);
@@ -239,12 +235,6 @@ function ProjectEntryForm({
     setGeneral(false);
     setUnits((prev) => (prev.includes(u) ? prev.filter((x) => x !== u) : [...prev, u]));
     if (u === "fraga") setOperations([]);
-  };
-
-  const toggleAll = () => {
-    setGeneral(false);
-    if (allSelected) { setUnits([]); setOperations([]); }
-    else setUnits([...UNITS]);
   };
 
   // Projeto já usado antes: sugere de novo os centros de custo ligados a ele,
@@ -297,16 +287,6 @@ function ProjectEntryForm({
               : { backgroundColor: "#fff", borderColor: "rgba(0,0,0,0.2)", color: "#71717a" }}
           >
             Geral
-          </button>
-          <button
-            type="button"
-            onClick={toggleAll}
-            className="h-6 px-2 rounded-md text-[10px] font-semibold border transition-all"
-            style={allSelected
-              ? { backgroundColor: "#18181b", borderColor: "#18181b", color: "#fff" }
-              : { backgroundColor: "#fff", borderColor: "rgba(0,0,0,0.1)", color: "#71717a" }}
-          >
-            Todos
           </button>
           {UNITS.map((u) => {
             const active = units.includes(u);
