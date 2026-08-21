@@ -149,10 +149,11 @@ export const UNIT_EXPORT_NAMES: Record<Unit, string> = {
 };
 
 // Texto da coluna OPERAÇÃO no export — Fraga usa as tags escolhidas
-// (HS/NC/NA's/Todas), Woncred e Profit têm operação sempre fixa (não têm
-// seletor de tags como a Fraga) e Wolf fica em branco.
+// (HS/NC/NA's/Todas); Wolf, Woncred e Profit têm operação sempre fixa (não
+// têm seletor de tags como a Fraga).
 export function operacaoTextForUnits(units: Unit[], operations?: OperationTag[]): string {
   const parts: string[] = [];
+  if (units.includes("wolf")) parts.push("Venda de Consórcios (Wolf)");
   if (units.includes("fraga")) {
     const t = operationsToExportText(operations);
     if (t) parts.push(t);
