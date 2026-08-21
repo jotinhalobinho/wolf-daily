@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
   id              INT AUTO_INCREMENT PRIMARY KEY,
   username        VARCHAR(100) NOT NULL UNIQUE,
   password_hash   VARCHAR(255) NOT NULL,
+  must_change_password TINYINT(1) NOT NULL DEFAULT 0,
   role            ENUM('admin','collaborator') NOT NULL,
   collaborator_id VARCHAR(64) NULL,
   created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,

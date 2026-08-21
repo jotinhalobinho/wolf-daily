@@ -23,6 +23,12 @@ function getSecret() {
 const JWT_SECRET = getSecret();
 const COOKIE_NAME = "rateio_token";
 
+// Senha padrão usada tanto na criação de um novo acesso quanto na redefinição
+// pelo admin — o admin nunca escolhe uma senha arbitrária pra outra pessoa,
+// só pode voltar pro padrão (a pessoa troca no primeiro login, ver
+// must_change_password).
+const DEFAULT_PASSWORD = "wolf360";
+
 function hashPassword(password) {
   return bcrypt.hashSync(password, 10);
 }
@@ -60,7 +66,13 @@ async function getUserFromReq(req) {
     const payload = jwt.verify(token, JWT_SECRET);
     const user = await db.get("SELECT * FROM users WHERE id = ?", [payload.uid]);
     if (!user) return null;
-    return { id: user.id, username: user.username, role: user.role, collaboratorId: user.collaborator_id };
+    return {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      collaboratorId: user.collaborator_id,
+      mustChangePassword: !!user.must_change_password,
+    };
   } catch (e) {
     return null;
   }
@@ -94,4 +106,5 @@ module.exports = {
   requireAuth,
   requireAdmin,
   COOKIE_NAME,
+  DEFAULT_PASSWORD,
 };

@@ -7,7 +7,7 @@ import {
 import {
   Unit, UNITS, UNIT_NAMES, UNIT_COLORS, UNIT_EXPORT_NAMES,
   OperationTag, OPERATION_TAG_ORDER, OperationTagPicker,
-  operationsToExportText, MONTHS, MONTHS_SHORT,
+  operationsToExportText, operacaoTextForUnits, MONTHS, MONTHS_SHORT,
 } from "./App";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -158,13 +158,12 @@ function exportDailyPeriodToExcel(period: DailyPeriod, displayName: string) {
   ];
 
   const totals = new Map<string, { projectName: string; units: Unit[]; general: boolean; operations: OperationTag[]; days: number }>();
-  let atestadoDays = 0;
-  let dayOffDays = 0;
 
   for (const day of period.days) {
     if (!day.isBusinessDay) continue;
-    if (day.dayOff) { dayOffDays += 1; continue; }
-    if (day.atestado) { atestadoDays += 1; continue; }
+    // Atestado e day off só reduzem os dias úteis exigidos do colaborador —
+    // não entram na planilha de exportação (ver requiredDays em App.tsx).
+    if (day.dayOff || day.atestado) continue;
 
     // Cada projeto do dia já vem com todos os centros/operações juntos — não
     // conta o dia duas vezes. Se o dia tiver mais de um projeto, o dia é
@@ -183,15 +182,13 @@ function exportDailyPeriodToExcel(period: DailyPeriod, displayName: string) {
   const rows: (string | number)[][] = [header];
   for (const t of totals.values()) {
     t.days = Math.round(t.days * 100) / 100;
-    const empresaText = unitsToExportText(t.units, t.general);
-    const operacaoText = t.units.includes("fraga") ? operationsToExportText(t.operations) : "";
-    rows.push(["", competencia, displayName, t.projectName, empresaText, "", operacaoText, "", t.days]);
-  }
-  if (atestadoDays > 0) {
-    rows.push(["", competencia, displayName, "Atestado", "", "", "", "", atestadoDays]);
-  }
-  if (dayOffDays > 0) {
-    rows.push(["", competencia, displayName, "Day Off", "", "", "", "", dayOffDays]);
+    // "Todos" (todos os 4 centros de custo no mesmo lançamento) é tratado como
+    // Grupo Wolf 360 — a lista "Todos" vira observação, e a operação fica em branco.
+    const isTodos = !t.general && t.units.length >= UNITS.length;
+    const empresaText = isTodos ? "Grupo Wolf 360" : unitsToExportText(t.units, t.general);
+    const obsEmpresaText = isTodos ? "Todos" : "";
+    const operacaoText = isTodos ? "" : operacaoTextForUnits(t.units, t.operations);
+    rows.push(["", competencia, displayName, t.projectName, empresaText, obsEmpresaText, operacaoText, "", t.days]);
   }
 
   const worksheet = XLSX.utils.aoa_to_sheet(rows);
