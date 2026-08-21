@@ -3,14 +3,15 @@
 const express = require("express");
 const db = require("../db");
 const asyncHandler = require("../asyncHandler");
-const { requireAuth, requireAdmin, hashPassword } = require("../auth");
+const { requireAuth, requireAdmin, hashPassword, DEFAULT_PASSWORD } = require("../auth");
 
 const router = express.Router();
 router.use(requireAuth, requireAdmin);
 
 async function listUsers() {
   return db.all(
-    `SELECT u.id, u.username, u.role, u.collaborator_id as collaboratorId, c.name as collaboratorName
+    `SELECT u.id, u.username, u.role, u.must_change_password as mustChangePassword,
+            u.collaborator_id as collaboratorId, c.name as collaboratorName
      FROM users u LEFT JOIN collaborators c ON c.id = u.collaborator_id
      ORDER BY u.id ASC`
   );
@@ -20,17 +21,19 @@ async function listUsers() {
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    res.json(await listUsers());
+    res.json((await listUsers()).map((u) => ({ ...u, mustChangePassword: !!u.mustChangePassword })));
   })
 );
 
-// POST /api/users  { username, password, role, collaboratorId? }
+// POST /api/users  { username, role, collaboratorId? }
+// A senha nunca é escolhida pelo admin: todo acesso novo nasce com a senha
+// padrão (DEFAULT_PASSWORD) e a pessoa é obrigada a trocá-la no primeiro login.
 router.post(
   "/",
   asyncHandler(async (req, res) => {
-    const { username, password, role, collaboratorId } = req.body || {};
-    if (!username || !password || String(password).length < 6) {
-      return res.status(400).json({ error: "Informe usuário e senha (mínimo 6 caracteres)" });
+    const { username, role, collaboratorId } = req.body || {};
+    if (!username) {
+      return res.status(400).json({ error: "Informe o usuário" });
     }
     if (!["admin", "collaborator"].includes(role)) {
       return res.status(400).json({ error: "Papel inválido" });
@@ -47,8 +50,8 @@ router.post(
 
     try {
       const info = await db.run(
-        "INSERT INTO users (username, password_hash, role, collaborator_id) VALUES (?, ?, ?, ?)",
-        [String(username).trim(), hashPassword(password), role, role === "collaborator" ? collaboratorId : null]
+        "INSERT INTO users (username, password_hash, must_change_password, role, collaborator_id) VALUES (?, ?, 1, ?, ?)",
+        [String(username).trim(), hashPassword(DEFAULT_PASSWORD), role, role === "collaborator" ? collaboratorId : null]
       );
       res.status(201).json({ id: Number(info.lastInsertRowid) });
     } catch (e) {
@@ -57,7 +60,7 @@ router.post(
   })
 );
 
-// PUT /api/users/:id  { password?, role? }
+// PUT /api/users/:id  { role? }
 router.put(
   "/:id",
   asyncHandler(async (req, res) => {
@@ -65,7 +68,7 @@ router.put(
     const row = await db.get("SELECT * FROM users WHERE id = ?", [id]);
     if (!row) return res.status(404).json({ error: "Acesso não encontrado" });
 
-    const { password, role } = req.body || {};
+    const { role } = req.body || {};
     if (role && !["admin", "collaborator"].includes(role)) {
       return res.status(400).json({ error: "Papel inválido" });
     }
@@ -73,13 +76,26 @@ router.put(
       const admins = await db.get("SELECT COUNT(*) as c FROM users WHERE role = 'admin'");
       if (Number(admins.c) <= 1) return res.status(400).json({ error: "Não é possível remover o último administrador" });
     }
-    if (password) {
-      if (String(password).length < 6) return res.status(400).json({ error: "Senha deve ter ao menos 6 caracteres" });
-      await db.run("UPDATE users SET password_hash = ? WHERE id = ?", [hashPassword(password), id]);
-    }
     if (role) {
       await db.run("UPDATE users SET role = ? WHERE id = ?", [role, id]);
     }
+    res.json({ ok: true });
+  })
+);
+
+// POST /api/users/:id/reset-password
+// Único jeito do admin "mexer" na senha de outra pessoa: redefine para o
+// padrão (DEFAULT_PASSWORD) e força a troca no próximo login.
+router.post(
+  "/:id/reset-password",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const row = await db.get("SELECT id FROM users WHERE id = ?", [id]);
+    if (!row) return res.status(404).json({ error: "Acesso não encontrado" });
+    await db.run(
+      "UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?",
+      [hashPassword(DEFAULT_PASSWORD), id]
+    );
     res.json({ ok: true });
   })
 );

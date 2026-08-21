@@ -45,6 +45,13 @@ async function runMigrations() {
     );
     console.log("  [migração] daily_day_items.unit agora aceita 'geral'.");
   }
+
+  // Força a troca de senha no primeiro login (senha inicial/redefinida sempre
+  // é o padrão "wolf360" — ver server/src/auth.js DEFAULT_PASSWORD).
+  if (!(await columnExists("users", "must_change_password"))) {
+    await db.run("ALTER TABLE users ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 0 AFTER password_hash");
+    console.log("  [migração] coluna users.must_change_password criada.");
+  }
 }
 
 module.exports = { runMigrations };

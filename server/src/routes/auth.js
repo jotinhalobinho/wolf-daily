@@ -27,7 +27,7 @@ async function enrich(user) {
     const c = await db.get("SELECT name FROM collaborators WHERE id = ?", [user.collaboratorId]);
     collaboratorName = c ? c.name : null;
   }
-  return { ...user, collaboratorName };
+  return { ...user, mustChangePassword: !!user.mustChangePassword, collaboratorName };
 }
 
 // GET /api/auth/status
@@ -62,6 +62,7 @@ router.post(
       username: String(username).trim(),
       role: "admin",
       collaboratorId: null,
+      mustChangePassword: false,
     };
     const token = signToken({ id: user.id, username: user.username, role: user.role, collaborator_id: null });
     setAuthCookie(res, token);
@@ -81,7 +82,13 @@ router.post(
     }
     const token = signToken(row);
     setAuthCookie(res, token);
-    const user = { id: row.id, username: row.username, role: row.role, collaboratorId: row.collaborator_id };
+    const user = {
+      id: row.id,
+      username: row.username,
+      role: row.role,
+      collaboratorId: row.collaborator_id,
+      mustChangePassword: !!row.must_change_password,
+    };
     res.json({ user: await enrich(user) });
   })
 );
@@ -114,7 +121,10 @@ router.put(
     if (!row || !verifyPassword(oldPassword || "", row.password_hash)) {
       return res.status(401).json({ error: "Senha atual incorreta" });
     }
-    await db.run("UPDATE users SET password_hash = ? WHERE id = ?", [hashPassword(newPassword), req.user.id]);
+    await db.run(
+      "UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?",
+      [hashPassword(newPassword), req.user.id]
+    );
     res.json({ ok: true });
   })
 );

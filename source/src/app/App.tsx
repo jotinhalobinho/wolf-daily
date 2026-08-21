@@ -139,12 +139,26 @@ export const MONTHS = [
 export const MONTHS_SHORT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 // Nomes de empresa usados no modelo de planilha de exportação (podem diferir dos rótulos exibidos na tela).
+// Woncred é exportada com a razão social "Fraga e Bitello" (mesma empresa por trás), com a operação
+// marcada como "Marketplace" — ver operacaoTextForUnits.
 export const UNIT_EXPORT_NAMES: Record<Unit, string> = {
   wolf: "Wolf Vendas",
   fraga: "Fraga e Bitello",
-  woncred: "Woncred",
+  woncred: "Fraga e Bitello",
   profit: "Profit",
 };
+
+// Texto da coluna OPERAÇÃO no export — combina as tags de operação da Fraga
+// (HS/NC/NA's) com o rótulo fixo "Marketplace" quando o centro de custo é a Woncred.
+export function operacaoTextForUnits(units: Unit[], operations?: OperationTag[]): string {
+  const parts: string[] = [];
+  if (units.includes("fraga")) {
+    const t = operationsToExportText(operations);
+    if (t) parts.push(t);
+  }
+  if (units.includes("woncred")) parts.push("Marketplace");
+  return parts.join(" + ");
+}
 
 // Nenhum colaborador vem pré-cadastrado: a lista é carregada do banco de dados via API.
 
@@ -278,6 +292,7 @@ interface SidebarProps {
   displayName: string;
   displaySubtitle: string;
   onLogout: () => void;
+  onChangePassword: () => void;
 }
 
 const ADMIN_NAV: { id: View; label: string; icon: React.ReactNode }[] = [
@@ -296,7 +311,7 @@ const COLLAB_NAV: { id: View; label: string; icon: React.ReactNode }[] = [
   { id: "diario", label: "Meu Rateio Diário", icon: <CalendarDays size={16} /> },
 ];
 
-function Sidebar({ active, onNav, role, displayName, displaySubtitle, onLogout }: SidebarProps) {
+function Sidebar({ active, onNav, role, displayName, displaySubtitle, onLogout, onChangePassword }: SidebarProps) {
   const nav = role === "admin" ? ADMIN_NAV : COLLAB_NAV;
   return (
     <aside className="w-56 shrink-0 h-screen flex flex-col border-r border-[rgba(0,0,0,0.06)] bg-white">
@@ -335,6 +350,12 @@ function Sidebar({ active, onNav, role, displayName, displaySubtitle, onLogout }
             <p className="text-[10px] text-[#a1a1aa] truncate">{displaySubtitle}</p>
           </div>
         </div>
+        <button
+          onClick={onChangePassword}
+          className="w-full flex items-center gap-2 px-3 h-7 rounded-lg text-xs text-[#71717a] hover:text-[#18181b] hover:bg-[#f7f7f8] transition-all"
+        >
+          <KeyRound size={13} />Alterar senha
+        </button>
         <button
           onClick={onLogout}
           className="w-full flex items-center gap-2 px-3 h-7 rounded-lg text-xs text-[#71717a] hover:text-red-500 hover:bg-red-50 transition-all"
@@ -740,7 +761,7 @@ function exportReleaseToExcel(release: RateioRelease, collaborators: Collaborato
           p.name,
           UNIT_EXPORT_NAMES[u],
           "",
-          u === "fraga" ? operationsToExportText(p.operations) : "",
+          operacaoTextForUnits([u], p.operations),
           "",
           p.days,
         ]);
@@ -752,15 +773,8 @@ function exportReleaseToExcel(release: RateioRelease, collaborators: Collaborato
       rows.push(["", competencia, c.name, p.name, "", "", "", "", p.days]);
     }
 
-    for (const p of entry.atestados ?? []) {
-      if (!p.days) continue;
-      rows.push(["", competencia, c.name, p.name, "", "Atestado", "", "", p.days]);
-    }
-
-    for (const p of entry.dayOffs ?? []) {
-      if (!p.days) continue;
-      rows.push(["", competencia, c.name, p.name, "", "Day Off", "", "", p.days]);
-    }
+    // Atestado e day off só reduzem os dias úteis exigidos do colaborador
+    // (ver requiredDays) — não entram na planilha de exportação.
   }
 
   const worksheet = XLSX.utils.aoa_to_sheet(rows);
@@ -2335,6 +2349,7 @@ interface AuthUser {
   role: UserRole;
   collaboratorId: string | null;
   collaboratorName: string | null;
+  mustChangePassword: boolean;
 }
 
 function AuthShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
@@ -2352,6 +2367,64 @@ function AuthShell({ title, subtitle, children }: { title: string; subtitle: str
         {children}
       </div>
     </div>
+  );
+}
+
+// Formulário de troca de senha em si — reaproveitado tanto na tela obrigatória
+// de primeiro login quanto no modal voluntário (Sidebar → "Alterar senha").
+function ChangePasswordForm({ onDone, onCancel }: { onDone: () => void; onCancel?: () => void }) {
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = () => {
+    setError("");
+    if (!oldPassword) { setError("Informe a senha atual"); return; }
+    if (newPassword.length < 6) { setError("A nova senha deve ter ao menos 6 caracteres"); return; }
+    if (newPassword !== confirm) { setError("As senhas não coincidem"); return; }
+    setLoading(true);
+    apiPut("/auth/password", { oldPassword, newPassword })
+      .then(() => onDone())
+      .catch((e: Error) => { setError(e.message || "Não foi possível trocar a senha"); setLoading(false); });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-xs font-medium text-[#71717a] mb-1.5">Senha atual</label>
+        <input type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" autoFocus />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-[#71717a] mb-1.5">Nova senha</label>
+        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-[#71717a] mb-1.5">Confirmar nova senha</label>
+        <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" />
+      </div>
+      {error && <p className="text-xs text-red-500">{error}</p>}
+      <div className="flex items-center gap-2 pt-1">
+        {onCancel && (
+          <button onClick={onCancel} className="flex-1 h-9 text-sm text-[#71717a] hover:text-[#18181b] rounded-lg hover:bg-[#f4f4f6] transition-all">Cancelar</button>
+        )}
+        <button onClick={submit} disabled={loading} className="flex-1 h-9 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] disabled:opacity-50 transition-all">
+          {loading ? "Salvando…" : "Salvar nova senha"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Tela obrigatória de primeiro login — aparece uma única vez (enquanto
+// users.must_change_password estiver ligado) sempre que o acesso foi criado ou
+// redefinido pelo admin, já que nesses casos a senha é sempre o padrão wolf360.
+function ForcePasswordChange({ onDone }: { onDone: () => void }) {
+  return (
+    <AuthShell title="Troque sua senha" subtitle="Este é seu primeiro acesso (ou sua senha foi redefinida). Informe a senha padrão como senha atual e escolha uma nova antes de continuar.">
+      <ChangePasswordForm onDone={onDone} />
+    </AuthShell>
   );
 }
 
@@ -2439,9 +2512,15 @@ interface AccessRow {
   id: number;
   username: string;
   role: UserRole;
+  mustChangePassword: boolean;
   collaboratorId: string | null;
   collaboratorName: string | null;
 }
+
+// A senha nunca é escolhida pelo admin: todo acesso nasce (ou é redefinido)
+// com a senha padrão e a pessoa é obrigada a trocá-la no próximo login (ver
+// server/src/auth.js DEFAULT_PASSWORD e ForcePasswordChange).
+const DEFAULT_PASSWORD_HINT = "wolf360";
 
 function AcessosView({ collaborators, currentUserId }: AcessosViewProps) {
   const [users, setUsers] = useState<AccessRow[]>([]);
@@ -2449,11 +2528,9 @@ function AcessosView({ collaborators, currentUserId }: AcessosViewProps) {
   const [creating, setCreating] = useState(false);
   const [newType, setNewType] = useState<UserRole>("collaborator");
   const [newUsername, setNewUsername] = useState("");
-  const [newPassword, setNewPassword] = useState("");
   const [newCollaboratorId, setNewCollaboratorId] = useState("");
   const [error, setError] = useState("");
-  const [resetId, setResetId] = useState<number | null>(null);
-  const [resetPassword, setResetPassword] = useState("");
+  const [resettingId, setResettingId] = useState<number | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -2465,15 +2542,14 @@ function AcessosView({ collaborators, currentUserId }: AcessosViewProps) {
 
   const createAccess = () => {
     setError("");
-    if (!newUsername.trim() || newPassword.length < 6) { setError("Informe usuário e senha (mín. 6 caracteres)"); return; }
+    if (!newUsername.trim()) { setError("Informe o usuário"); return; }
     if (newType === "collaborator" && !newCollaboratorId) { setError("Selecione o colaborador"); return; }
     apiPost("/users", {
       username: newUsername.trim(),
-      password: newPassword,
       role: newType,
       collaboratorId: newType === "collaborator" ? newCollaboratorId : undefined,
     })
-      .then(() => { setCreating(false); setNewUsername(""); setNewPassword(""); setNewCollaboratorId(""); load(); })
+      .then(() => { setCreating(false); setNewUsername(""); setNewCollaboratorId(""); load(); })
       .catch((e: Error) => setError(e.message || "Não foi possível criar o acesso"));
   };
 
@@ -2482,11 +2558,13 @@ function AcessosView({ collaborators, currentUserId }: AcessosViewProps) {
     apiDelete(`/users/${id}`).then(load).catch((e: Error) => alert(e.message || "Não foi possível remover"));
   };
 
-  const saveReset = (id: number) => {
-    if (resetPassword.length < 6) { alert("Senha deve ter ao menos 6 caracteres"); return; }
-    apiPut(`/users/${id}`, { password: resetPassword })
-      .then(() => { setResetId(null); setResetPassword(""); })
-      .catch((e: Error) => alert(e.message || "Não foi possível redefinir a senha"));
+  const resetToDefault = (id: number) => {
+    if (!confirm(`Redefinir a senha para o padrão (${DEFAULT_PASSWORD_HINT})? A pessoa será obrigada a trocá-la no próximo login.`)) return;
+    setResettingId(id);
+    apiPost(`/users/${id}/reset-password`, {})
+      .then(load)
+      .catch((e: Error) => alert(e.message || "Não foi possível redefinir a senha"))
+      .finally(() => setResettingId(null));
   };
 
   return (
@@ -2517,16 +2595,11 @@ function AcessosView({ collaborators, currentUserId }: AcessosViewProps) {
                 {withoutLogin.length === 0 && <p className="text-[11px] text-[#a1a1aa] mt-1">Todos os colaboradores já possuem acesso, ou nenhum colaborador foi cadastrado ainda.</p>}
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-[#71717a] mb-1.5">Usuário</label>
-                <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} className="w-full h-8 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none" placeholder="ex: joao.silva" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[#71717a] mb-1.5">Senha</label>
-                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full h-8 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none" placeholder="mínimo 6 caracteres" />
-              </div>
+            <div>
+              <label className="block text-xs font-medium text-[#71717a] mb-1.5">Usuário</label>
+              <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} className="w-full h-8 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none" placeholder="ex: joao.silva" />
             </div>
+            <p className="text-[11px] text-[#a1a1aa]">A senha inicial é sempre <strong className="text-[#71717a]">{DEFAULT_PASSWORD_HINT}</strong> — a pessoa será obrigada a trocá-la no primeiro login.</p>
             {error && <p className="text-xs text-red-500">{error}</p>}
             <div className="flex items-center justify-end gap-2">
               <button onClick={() => { setCreating(false); setError(""); }} className="h-8 px-4 text-sm text-[#71717a] hover:text-[#18181b] rounded-lg hover:bg-[#f4f4f6] transition-all">Cancelar</button>
@@ -2542,37 +2615,31 @@ function AcessosView({ collaborators, currentUserId }: AcessosViewProps) {
                 <th className="text-left px-5 py-3 text-xs font-medium text-[#71717a]">Usuário</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-[#71717a]">Tipo</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-[#71717a]">Colaborador vinculado</th>
-                <th className="px-5 py-3 w-40" />
+                <th className="px-5 py-3 w-48" />
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
-                <>
-                  <tr key={u.id} className="border-b border-[rgba(0,0,0,0.04)] last:border-0">
-                    <td className="px-5 py-3 text-sm font-medium">{u.username}</td>
-                    <td className="px-5 py-3 text-sm text-[#71717a]">{u.role === "admin" ? "Administrador" : "Colaborador"}</td>
-                    <td className="px-5 py-3 text-sm text-[#71717a]">{u.collaboratorName || "—"}</td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-1 justify-end">
-                        <button onClick={() => { setResetId(u.id); setResetPassword(""); }} className="h-6 px-2 text-[11px] rounded-md text-[#71717a] hover:text-[#18181b] hover:bg-[#f4f4f6] transition-all">Redefinir senha</button>
-                        {u.id !== currentUserId && (
-                          <button onClick={() => removeAccess(u.id)} className="w-6 h-6 rounded-md flex items-center justify-center text-[#a1a1aa] hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={12} /></button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                  {resetId === u.id && (
-                    <tr key={`reset-${u.id}`}>
-                      <td colSpan={4} className="px-5 pb-3">
-                        <div className="flex items-center gap-2 bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg p-3">
-                          <input type="password" autoFocus value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} placeholder="Nova senha (mín. 6 caracteres)" className="flex-1 h-8 px-3 text-sm bg-white border border-[rgba(0,0,0,0.07)] rounded-lg outline-none" />
-                          <button onClick={() => saveReset(u.id)} className="h-8 px-3 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] transition-all">Salvar</button>
-                          <button onClick={() => setResetId(null)} className="h-8 px-3 text-sm text-[#71717a] hover:text-[#18181b] rounded-lg transition-all">Cancelar</button>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </>
+                <tr key={u.id} className="border-b border-[rgba(0,0,0,0.04)] last:border-0">
+                  <td className="px-5 py-3 text-sm font-medium">
+                    {u.username}
+                    {u.mustChangePassword && (
+                      <span className="ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 align-middle">senha padrão</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3 text-sm text-[#71717a]">{u.role === "admin" ? "Administrador" : "Colaborador"}</td>
+                  <td className="px-5 py-3 text-sm text-[#71717a]">{u.collaboratorName || "—"}</td>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-1 justify-end">
+                      <button onClick={() => resetToDefault(u.id)} disabled={resettingId === u.id} className="h-6 px-2 text-[11px] rounded-md text-[#71717a] hover:text-[#18181b] hover:bg-[#f4f4f6] disabled:opacity-50 transition-all">
+                        {resettingId === u.id ? "Redefinindo…" : "Redefinir senha"}
+                      </button>
+                      {u.id !== currentUserId && (
+                        <button onClick={() => removeAccess(u.id)} className="w-6 h-6 rounded-md flex items-center justify-center text-[#a1a1aa] hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={12} /></button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
               ))}
               {!loading && users.length === 0 && (
                 <tr><td colSpan={4} className="px-5 py-8 text-center text-sm text-[#a1a1aa]">Nenhum acesso cadastrado</td></tr>
@@ -2600,6 +2667,7 @@ function MainApp({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const [releases, setReleases] = useState<RateioRelease[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -2646,7 +2714,23 @@ function MainApp({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
         displayName={role === "admin" ? user.username : (currentCollaborator?.name ?? user.username)}
         displaySubtitle={role === "admin" ? "Administrador" : (currentCollaborator?.role ?? "Colaborador")}
         onLogout={onLogout}
+        onChangePassword={() => setShowChangePassword(true)}
       />
+
+      {showChangePassword && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-8">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold">Alterar senha</h3>
+              <p className="text-xs text-[#71717a] mt-0.5">Informe sua senha atual e escolha uma nova.</p>
+            </div>
+            <ChangePasswordForm
+              onCancel={() => setShowChangePassword(false)}
+              onDone={() => setShowChangePassword(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {view === "dashboard" && (
         <DashboardView
@@ -2745,6 +2829,7 @@ export default function App() {
   }
   if (status === "needsSetup") return <Setup onDone={loadStatus} />;
   if (status === "needsLogin" || !user) return <Login onDone={loadStatus} />;
+  if (user.mustChangePassword) return <ForcePasswordChange onDone={loadStatus} />;
 
   return <MainApp user={user} onLogout={handleLogout} />;
 }
