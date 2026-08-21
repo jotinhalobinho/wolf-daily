@@ -148,8 +148,9 @@ export const UNIT_EXPORT_NAMES: Record<Unit, string> = {
   profit: "Profit",
 };
 
-// Texto da coluna OPERAÇÃO no export — combina as tags de operação da Fraga
-// (HS/NC/NA's) com o rótulo fixo "Marketplace" quando o centro de custo é a Woncred.
+// Texto da coluna OPERAÇÃO no export — Fraga usa as tags escolhidas
+// (HS/NC/NA's/Todas), Woncred e Profit têm operação sempre fixa (não têm
+// seletor de tags como a Fraga) e Wolf fica em branco.
 export function operacaoTextForUnits(units: Unit[], operations?: OperationTag[]): string {
   const parts: string[] = [];
   if (units.includes("fraga")) {
@@ -157,6 +158,7 @@ export function operacaoTextForUnits(units: Unit[], operations?: OperationTag[])
     if (t) parts.push(t);
   }
   if (units.includes("woncred")) parts.push("Marketplace");
+  if (units.includes("profit")) parts.push("Não Contemplada");
   return parts.join(" + ");
 }
 
@@ -768,9 +770,12 @@ function exportReleaseToExcel(release: RateioRelease, collaborators: Collaborato
       }
     }
 
+    // "Demandas Gerais" (sem centro de custo específico) sempre vira uma
+    // única linha por projeto — nunca uma por centro de custo — com empresa
+    // fixa "Fraga e Bitello" e a observação "Todas".
     for (const p of entry.generalProjects ?? []) {
       if (!p.days) continue;
-      rows.push(["", competencia, c.name, p.name, "", "", "", "", p.days]);
+      rows.push(["", competencia, c.name, p.name, "Fraga e Bitello", "Todas", "", "", p.days]);
     }
 
     // Atestado e day off só reduzem os dias úteis exigidos do colaborador
