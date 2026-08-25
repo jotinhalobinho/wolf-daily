@@ -1,10 +1,24 @@
 import { useState, useEffect, useMemo } from "react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "./api";
-import { Laptop2, Lock, Unlock, ChevronDown, ChevronUp, Plus, Trash2, AlertCircle, Users as UsersIcon } from "lucide-react";
-import { Collaborator, Sector, Avatar, fmtDate, MONTHS } from "./App";
+import { Lock, Unlock, ChevronDown, ChevronUp, Plus, Trash2, AlertCircle, Info, Users as UsersIcon, X, Wrench } from "lucide-react";
+import { Sector, fmtDate, MONTHS } from "./App";
 import { weeklyQuotaForDate, isoWeekKey, sectorMaxHO } from "./homeOfficeRules";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
+
+// Versão "segura" do colaborador, vinda de GET /api/home-office/roster — só
+// os campos necessários pra montar a escala (nunca salário/aniversário/cargo).
+// A escala é visível pra equipe inteira (diferente do Rateio Mensal, que
+// restringe GET /api/collaborators ao próprio registro por privacidade
+// salarial), por isso não reaproveitamos o tipo Collaborator de App.tsx aqui.
+interface HOMember {
+  id: string;
+  name: string;
+  color?: string;
+  sectorId?: string;
+  hireDate?: string;
+  active: boolean;
+}
 
 interface HOEntry {
   collaboratorId: string;
@@ -38,27 +52,47 @@ interface HOPeriod {
 }
 
 interface HomeOfficeProps {
-  collaborators: Collaborator[];
   sectors: Sector[];
   role: "admin" | "collaborator";
   currentCollaboratorId: string;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers de data ────────────────────────────────────────────────────────────
 
 function todayISO(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function weekdayAbbrev(iso: string): string {
+const WEEKDAY_FULL = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+
+function weekdayFullName(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][dt.getDay()];
+  return WEEKDAY_FULL[new Date(y, m - 1, d).getDay()];
 }
 
-function dayNum(iso: string): string {
-  return iso.split("-")[2];
+function fmtDayMonth(iso: string): string {
+  const [, m, d] = iso.split("-");
+  return `${d}/${m}`;
+}
+
+// Agrupa os dias úteis do período em blocos de semana (cada bloco = uma
+// semana ISO), na ordem cronológica em que aparecem no mês — "Semana 1" é
+// sempre a primeira semana do período, não necessariamente a semana ISO nº1
+// do ano. Feriados já saem de period.businessDays, então uma semana com
+// feriado no meio simplesmente tem menos de 5 dias.
+function computeWeeks(businessDays: string[]): string[][] {
+  const weeks: string[][] = [];
+  let currentKey = "";
+  for (const d of businessDays) {
+    const key = isoWeekKey(d);
+    if (key !== currentKey) {
+      weeks.push([]);
+      currentKey = key;
+    }
+    weeks[weeks.length - 1].push(d);
+  }
+  return weeks;
 }
 
 // "AAAA-Www" -> { year, week } pra comparar semanas consecutivas.
@@ -84,7 +118,8 @@ function hasThreeConsecutiveWeeks(weekKeys: string[]): boolean {
   return false;
 }
 
-// Avisos leves (nunca bloqueiam) sobre os dias de HO já marcados por alguém.
+// Avisos leves (nunca bloqueiam) sobre os dias de HO já marcados por alguém —
+// cada string aqui vira o texto do tooltip do ícone de aviso.
 function computeWarnings(businessDays: string[], dates: string[]): string[] {
   if (dates.length < 2) return [];
   const warnings: string[] = [];
@@ -95,7 +130,7 @@ function computeWarnings(businessDays: string[], dates: string[]): string[] {
     const idx = dayIndex.get(sorted[i]);
     const nextIdx = dayIndex.get(sorted[i + 1]);
     if (idx != null && nextIdx != null && nextIdx === idx + 1) {
-      warnings.push("Dias consecutivos de home office nesta semana");
+      warnings.push("Dias consecutivos de home office marcados na mesma semana");
       break;
     }
   }
@@ -109,64 +144,151 @@ function computeWarnings(businessDays: string[], dates: string[]): string[] {
   }
   for (const weekKeys of byWeekday.values()) {
     if (hasThreeConsecutiveWeeks(weekKeys)) {
-      warnings.push("Sempre no mesmo dia da semana, várias semanas seguidas");
+      warnings.push("Sempre escolhe o mesmo dia da semana, em 3 ou mais semanas seguidas");
       break;
     }
   }
   return warnings;
 }
 
-// ─── Célula do grid ───────────────────────────────────────────────────────────
+// ─── Pílula de um colaborador dentro do dia ────────────────────────────────────
 
-interface HOCellProps {
-  collaborator: Collaborator;
-  date: string;
-  on: boolean;
-  special?: "ferias" | "dayoff";
-  isMeeting: boolean;
-  canToggle: boolean;
+interface HOPillProps {
+  collaborator: HOMember;
+  kind: "ho" | "ferias" | "dayoff";
+  isSelf: boolean;
+  canRemove: boolean;
   pending: boolean;
-  onToggle: () => void;
+  warnings: string[];
+  onRemove: () => void;
 }
 
-function HOCell({ collaborator, date, on, special, isMeeting, canToggle, pending, onToggle }: HOCellProps) {
-  if (special) {
-    return (
-      <td className="p-1">
-        <div
-          className={`h-8 rounded-md flex items-center justify-center text-[9px] font-semibold uppercase tracking-wide ${
-            special === "ferias" ? "bg-[var(--accent-amber-bg)] text-amber-600" : "bg-[var(--accent-pink-bg)] text-pink-600"
-          }`}
-          title={special === "ferias" ? "Férias" : "Day off"}
-        >
-          {special === "ferias" ? "Férias" : "Off"}
-        </div>
-      </td>
-    );
-  }
-  if (isMeeting) {
-    return (
-      <td className="p-1">
-        <div className="h-8 rounded-md flex items-center justify-center bg-muted text-[var(--tone-subtle)] cursor-not-allowed" title="Reunião Geral — sem home office">
-          <UsersIcon size={12} />
-        </div>
-      </td>
-    );
-  }
+function HOPill({ collaborator, kind, isSelf, canRemove, pending, warnings, onRemove }: HOPillProps) {
+  const style =
+    kind === "ferias"
+      ? { className: "bg-[var(--accent-amber-bg)] text-amber-600", label: `🌴 ${collaborator.name}` }
+      : kind === "dayoff"
+      ? { className: "bg-[var(--accent-pink-bg)] text-pink-600", label: `Day off ${collaborator.name}` }
+      : { className: "", label: collaborator.name };
+
   return (
-    <td className="p-1">
-      <button
-        onClick={canToggle ? onToggle : undefined}
-        disabled={!canToggle || pending}
-        title={on ? `${collaborator.name} — Home Office` : canToggle ? "Marcar Home Office" : undefined}
-        className={`w-full h-8 rounded-md border transition-all flex items-center justify-center ${
-          canToggle ? "cursor-pointer" : "cursor-default"
-        } ${on ? "border-transparent" : "border-dashed border-border hover:border-primary/40"} ${pending ? "opacity-50" : ""}`}
-        style={on ? { backgroundColor: collaborator.color || "var(--tone-subtle)" } : undefined}
-      >
-        {on && <Laptop2 size={12} className="text-white" />}
-      </button>
-    </td>
+    <div
+      className={`flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg ${style.className} ${isSelf ? "ring-2 ring-primary/40" : ""} ${pending ? "opacity-50" : ""}`}
+      style={kind === "ho" ? { backgroundColor: `${collaborator.color || "var(--tone-subtle)"}22`, color: collaborator.color || undefined } : undefined}
+    >
+      {kind === "ho" && <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: collaborator.color || "var(--tone-subtle)" }} />}
+      <span className="flex-1 truncate font-medium">{style.label}</span>
+      {warnings.length > 0 && (
+        <AlertCircle size={11} className="text-amber-500 shrink-0" title={warnings.join(" · ")} />
+      )}
+      {isSelf && canRemove && (
+        <button onClick={onRemove} disabled={pending} title="Desmarcar meu home office" className="shrink-0 opacity-70 hover:opacity-100 hover:text-red-500 transition-opacity">
+          <X size={12} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── Coluna de um dia (dentro do bloco da semana) ──────────────────────────────
+
+interface HODayColumnProps {
+  date: string;
+  isToday: boolean;
+  meeting?: HOMeeting;
+  hoEntries: HOMember[]; // quem está de HO nesse dia, já filtrado pelo setor
+  specialEntries: { collaborator: HOMember; type: "ferias" | "dayoff" }[];
+  warningsByCollaboratorId: Map<string, string[]>;
+  currentCollaboratorId: string;
+  selfOn: boolean;
+  selfBlockedReason?: string; // férias/dayoff/reunião — não pode marcar
+  canSelfToggle: boolean;
+  pendingSelf: boolean;
+  onToggleSelf: () => void;
+  teammatesOnHO: number;
+  sectorCapacityLabel?: string;
+  sectorCapacityFull?: boolean;
+}
+
+function HODayColumn({
+  date,
+  isToday,
+  meeting,
+  hoEntries,
+  specialEntries,
+  warningsByCollaboratorId,
+  currentCollaboratorId,
+  selfOn,
+  selfBlockedReason,
+  canSelfToggle,
+  pendingSelf,
+  onToggleSelf,
+  teammatesOnHO,
+  sectorCapacityLabel,
+  sectorCapacityFull,
+}: HODayColumnProps) {
+  const showAddSelf = canSelfToggle && !selfOn && !selfBlockedReason;
+
+  return (
+    <div className="flex flex-col border-r border-border last:border-r-0 min-w-[160px]">
+      <div className={`px-3 py-2 border-b border-border ${isToday ? "bg-muted" : ""}`}>
+        <p className={`text-xs font-semibold ${isToday ? "text-primary" : ""}`}>{weekdayFullName(date)}</p>
+        <p className="text-[10px] text-muted-foreground" style={{ fontFamily: "var(--font-mono)" }}>{fmtDayMonth(date)}</p>
+      </div>
+      <div className="p-2 space-y-1.5 flex-1">
+        {meeting ? (
+          <div className="rounded-lg bg-[var(--tone-subtle)]/15 border border-dashed border-[var(--tone-subtle)] p-3 text-center" title={meeting.title || "Reunião Geral — sem home office pra ninguém neste dia"}>
+            <UsersIcon size={16} className="mx-auto mb-1 text-muted-foreground" />
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Reunião Geral</p>
+            {meeting.title && <p className="text-[10px] text-[var(--tone-subtle)] mt-0.5">{meeting.title}</p>}
+          </div>
+        ) : (
+          <>
+            {(sectorCapacityLabel || teammatesOnHO > 0) && (
+              <div className="flex items-center gap-1 text-[10px] text-[var(--tone-subtle)] mb-1">
+                <Info
+                  size={11}
+                  className={sectorCapacityFull ? "text-red-500" : ""}
+                  title={
+                    teammatesOnHO > 0
+                      ? `${teammatesOnHO} ${teammatesOnHO === 1 ? "pessoa" : "pessoas"} do seu time já ${teammatesOnHO === 1 ? "está" : "estão"} de home office neste dia`
+                      : "Vagas de home office restantes no setor filtrado"
+                  }
+                />
+                <span className={sectorCapacityFull ? "text-red-500 font-medium" : ""}>{sectorCapacityLabel}</span>
+              </div>
+            )}
+            {hoEntries.map((c) => (
+              <HOPill
+                key={c.id}
+                collaborator={c}
+                kind="ho"
+                isSelf={c.id === currentCollaboratorId}
+                canRemove={canSelfToggle}
+                pending={pendingSelf && c.id === currentCollaboratorId}
+                warnings={warningsByCollaboratorId.get(c.id) ?? []}
+                onRemove={onToggleSelf}
+              />
+            ))}
+            {specialEntries.map(({ collaborator, type }) => (
+              <HOPill key={`${collaborator.id}-${type}`} collaborator={collaborator} kind={type} isSelf={false} canRemove={false} pending={false} warnings={[]} onRemove={() => {}} />
+            ))}
+            {showAddSelf && (
+              <button
+                onClick={onToggleSelf}
+                disabled={pendingSelf}
+                className="w-full h-8 rounded-lg border border-dashed border-border hover:border-primary/50 text-[11px] text-muted-foreground hover:text-foreground transition-all flex items-center justify-center gap-1"
+              >
+                <Plus size={12} />Marcar meu HO
+              </button>
+            )}
+            {hoEntries.length === 0 && specialEntries.length === 0 && !showAddSelf && (
+              <p className="text-[10px] text-[var(--tone-subtle)] text-center py-2">—</p>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -174,7 +296,7 @@ function HOCell({ collaborator, date, on, special, isMeeting, canToggle, pending
 
 interface HOSupervisorPanelProps {
   period: HOPeriod | null;
-  collaborators: Collaborator[];
+  roster: HOMember[];
   sectors: Sector[];
   onOpenPeriod: (month: number, year: number, deadline: string) => void;
   onPatchPeriod: (patch: { deadline?: string; status?: "open" | "approved" }) => void;
@@ -182,11 +304,12 @@ interface HOSupervisorPanelProps {
   onRemoveMeeting: (id: number) => void;
   onAddSpecialDay: (collaboratorId: string, date: string, type: "ferias" | "dayoff") => void;
   onRemoveSpecialDay: (id: number) => void;
+  onCorrectEntry: (collaboratorId: string, date: string, currentlyOn: boolean) => void;
 }
 
 function HOSupervisorPanel({
   period,
-  collaborators,
+  roster,
   sectors,
   onOpenPeriod,
   onPatchPeriod,
@@ -194,6 +317,7 @@ function HOSupervisorPanel({
   onRemoveMeeting,
   onAddSpecialDay,
   onRemoveSpecialDay,
+  onCorrectEntry,
 }: HOSupervisorPanelProps) {
   const [open, setOpen] = useState(!period);
   const now = new Date();
@@ -206,19 +330,27 @@ function HOSupervisorPanel({
   const [specialCollaboratorId, setSpecialCollaboratorId] = useState("");
   const [specialDate, setSpecialDate] = useState("");
   const [specialType, setSpecialType] = useState<"ferias" | "dayoff">("ferias");
+  const [correctionCollaboratorId, setCorrectionCollaboratorId] = useState("");
+  const [correctionDate, setCorrectionDate] = useState("");
 
   useEffect(() => setDeadlineDraft(period?.deadline ?? ""), [period?.id, period?.deadline]);
 
-  const collaboratorName = (id: string) => collaborators.find((c) => c.id === id)?.name ?? "—";
+  const collaboratorName = (id: string) => roster.find((c) => c.id === id)?.name ?? "—";
 
   const activeBySector = useMemo(() => {
     const map = new Map<string, number>();
-    for (const c of collaborators) {
+    for (const c of roster) {
       if (!c.active || !c.sectorId) continue;
       map.set(c.sectorId, (map.get(c.sectorId) ?? 0) + 1);
     }
     return map;
-  }, [collaborators]);
+  }, [roster]);
+
+  const correctionCurrentlyOn = useMemo(() => {
+    if (!period || !correctionCollaboratorId || !correctionDate) return false;
+    const entry = period.entries.find((e) => e.collaboratorId === correctionCollaboratorId);
+    return !!entry?.dates.includes(correctionDate);
+  }, [period, correctionCollaboratorId, correctionDate]);
 
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -328,7 +460,7 @@ function HOSupervisorPanel({
                   <div className="flex items-center gap-2">
                     <select className="h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary" value={specialCollaboratorId} onChange={(e) => setSpecialCollaboratorId(e.target.value)}>
                       <option value="">Colaborador…</option>
-                      {collaborators.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      {roster.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                     <input type="date" className="h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary" value={specialDate} onChange={(e) => setSpecialDate(e.target.value)} />
                     <select className="h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary" value={specialType} onChange={(e) => setSpecialType(e.target.value as "ferias" | "dayoff")}>
@@ -343,6 +475,34 @@ function HOSupervisorPanel({
                       <Plus size={13} />Adicionar
                     </button>
                   </div>
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <Wrench size={12} />Corrigir home office de um colaborador
+                </p>
+                <p className="text-[10px] text-[var(--tone-subtle)] mb-2">
+                  Uso excepcional — cada colaborador marca os próprios dias sozinho. Use isso só depois da escala já definida, pra corrigir uma troca pontual
+                  (ex: alguém que não pode mais ir presencial num dia e precisa trocar).
+                </p>
+                {period.status === "open" ? (
+                  <div className="flex items-center gap-2">
+                    <select className="h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary" value={correctionCollaboratorId} onChange={(e) => setCorrectionCollaboratorId(e.target.value)}>
+                      <option value="">Colaborador…</option>
+                      {roster.filter((c) => c.active).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <input type="date" className="h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary" value={correctionDate} onChange={(e) => setCorrectionDate(e.target.value)} />
+                    <button
+                      onClick={() => { onCorrectEntry(correctionCollaboratorId, correctionDate, correctionCurrentlyOn); setCorrectionDate(""); }}
+                      disabled={!correctionCollaboratorId || !correctionDate}
+                      className="h-8 px-3 text-sm font-medium bg-muted rounded-lg hover:bg-input-background disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    >
+                      {correctionCollaboratorId && correctionDate ? (correctionCurrentlyOn ? "Desmarcar HO" : "Marcar HO") : "Marcar/Desmarcar HO"}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-[var(--tone-subtle)]">Escala aprovada — reabra pra corrigir.</p>
                 )}
               </div>
 
@@ -370,29 +530,37 @@ function HOSupervisorPanel({
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export default function HomeOffice({ collaborators, sectors, role, currentCollaboratorId }: HomeOfficeProps) {
+export default function HomeOffice({ sectors, role, currentCollaboratorId }: HomeOfficeProps) {
   const [period, setPeriod] = useState<HOPeriod | null>(null);
+  const [roster, setRoster] = useState<HOMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [weekView, setWeekView] = useState(false);
   const [sectorFilter, setSectorFilter] = useState("all");
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState(0);
   const [pendingCells, setPendingCells] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    apiGet("/home-office/current")
-      .then((p) => { if (!cancelled) setPeriod(p); })
+    Promise.all([apiGet("/home-office/current"), apiGet("/home-office/roster")])
+      .then(([p, r]) => { if (!cancelled) { setPeriod(p); setRoster(r); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
   const today = todayISO();
-  const thisWeekKey = isoWeekKey(today);
 
-  const visibleDays = useMemo(() => {
-    if (!period) return [];
-    return weekView ? period.businessDays.filter((d) => isoWeekKey(d) === thisWeekKey) : period.businessDays;
-  }, [period, weekView, thisWeekKey]);
+  const weeks = useMemo(() => (period ? computeWeeks(period.businessDays) : []), [period]);
+
+  // Ao carregar (ou trocar de) período, seleciona automaticamente a semana
+  // que contém hoje — se não houver (mês passado/futuro), fica na primeira.
+  useEffect(() => {
+    if (!period) return;
+    const idx = weeks.findIndex((w) => w.includes(today));
+    setSelectedWeekIndex(idx >= 0 ? idx : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period?.id]);
+
+  const selectedWeek = weeks[selectedWeekIndex] ?? [];
 
   const entriesByCollaborator = useMemo(() => {
     const map = new Map<string, Set<string>>();
@@ -400,29 +568,36 @@ export default function HomeOffice({ collaborators, sectors, role, currentCollab
     return map;
   }, [period]);
 
-  const specialByKey = useMemo(() => {
-    const map = new Map<string, "ferias" | "dayoff">();
-    for (const s of period?.specialDays ?? []) map.set(`${s.collaboratorId}|${s.date}`, s.type);
+  const specialByDate = useMemo(() => {
+    const map = new Map<string, HOSpecialDay[]>();
+    for (const s of period?.specialDays ?? []) {
+      if (!map.has(s.date)) map.set(s.date, []);
+      map.get(s.date)!.push(s);
+    }
     return map;
   }, [period]);
 
-  const meetingDates = useMemo(() => new Set((period?.generalMeetings ?? []).map((m) => m.date)), [period]);
+  const meetingByDate = useMemo(() => {
+    const map = new Map<string, HOMeeting>();
+    for (const m of period?.generalMeetings ?? []) map.set(m.date, m);
+    return map;
+  }, [period]);
 
   const activeMembersBySector = useMemo(() => {
-    const map = new Map<string, Collaborator[]>();
-    for (const c of collaborators) {
+    const map = new Map<string, HOMember[]>();
+    for (const c of roster) {
       if (!c.active || !c.sectorId) continue;
       if (!map.has(c.sectorId)) map.set(c.sectorId, []);
       map.get(c.sectorId)!.push(c);
     }
     return map;
-  }, [collaborators]);
+  }, [roster]);
 
   // Quantas pessoas (ativas) de cada setor já estão de HO em cada data — usado
-  // só pro preview de vagas antes do clique (a checagem de verdade é no servidor).
+  // só pro preview de vagas/avisos; a checagem de verdade é sempre no servidor.
   const sectorUsageByDate = useMemo(() => {
     const map = new Map<string, number>();
-    for (const c of collaborators) {
+    for (const c of roster) {
       if (!c.active || !c.sectorId) continue;
       const dates = entriesByCollaborator.get(c.id);
       if (!dates) continue;
@@ -432,22 +607,36 @@ export default function HomeOffice({ collaborators, sectors, role, currentCollab
       }
     }
     return map;
-  }, [collaborators, entriesByCollaborator]);
+  }, [roster, entriesByCollaborator]);
 
-  const visibleCollaborators = useMemo(() => {
-    return collaborators
+  const warningsByCollaboratorId = useMemo(() => {
+    const map = new Map<string, string[]>();
+    if (!period) return map;
+    for (const c of roster) {
+      const dates = [...(entriesByCollaborator.get(c.id) ?? [])];
+      const w = computeWarnings(period.businessDays, dates);
+      if (w.length) map.set(c.id, w);
+    }
+    return map;
+  }, [roster, entriesByCollaborator, period]);
+
+  const collaboratorsById = useMemo(() => new Map(roster.map((c) => [c.id, c])), [roster]);
+  const viewerSectorId = collaboratorsById.get(currentCollaboratorId)?.sectorId;
+
+  const summaryCollaborators = useMemo(() => {
+    return roster
       .filter((c) => c.active)
       .filter((c) => sectorFilter === "all" || c.sectorId === sectorFilter)
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [collaborators, sectorFilter]);
-
-  const sectorName = (id?: string) => sectors.find((s) => s.id === id)?.name ?? "Sem setor";
+  }, [roster, sectorFilter]);
 
   function refreshPeriod(next: HOPeriod) {
     setPeriod(next);
   }
 
-  async function toggleCell(collaborator: Collaborator, date: string, currentlyOn: boolean) {
+  // Só chamada pra própria pessoa a partir do grid (ver canSelfToggle abaixo);
+  // o painel da supervisão chama a mesma função pra corrigir qualquer um.
+  async function toggleEntry(collaborator: HOMember, date: string, currentlyOn: boolean) {
     if (!period) return;
     const key = `${collaborator.id}|${date}`;
     if (pendingCells.has(key)) return;
@@ -495,7 +684,7 @@ export default function HomeOffice({ collaborators, sectors, role, currentCollab
       .then((res: { affectedCollaboratorIds: string[] }) => {
         if (res.affectedCollaboratorIds?.length) {
           const names = res.affectedCollaboratorIds
-            .map((id) => collaborators.find((c) => c.id === id)?.name ?? id)
+            .map((id) => roster.find((c) => c.id === id)?.name ?? id)
             .join(", ");
           alert(`Home office removido nesse dia para: ${names}`);
         }
@@ -525,6 +714,12 @@ export default function HomeOffice({ collaborators, sectors, role, currentCollab
       .catch((e) => alert(e.message));
   }
 
+  function correctEntry(collaboratorId: string, date: string, currentlyOn: boolean) {
+    const collaborator = collaboratorsById.get(collaboratorId);
+    if (!collaborator) return;
+    toggleEntry(collaborator, date, currentlyOn);
+  }
+
   if (loading) {
     return <div className="flex-1 flex items-center justify-center text-sm text-[var(--tone-subtle)]">Carregando…</div>;
   }
@@ -540,23 +735,17 @@ export default function HomeOffice({ collaborators, sectors, role, currentCollab
             </p>
           </div>
           {period && (
-            <div className="flex items-center gap-2">
-              <select className="h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary" value={sectorFilter} onChange={(e) => setSectorFilter(e.target.value)}>
-                <option value="all">Todos os setores</option>
-                {sectors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-              <div className="flex items-center bg-muted rounded-lg p-0.5">
-                <button onClick={() => setWeekView(false)} className={`h-7 px-3 text-xs font-medium rounded-md transition-all ${!weekView ? "bg-card shadow-sm" : "text-muted-foreground"}`}>Mês</button>
-                <button onClick={() => setWeekView(true)} className={`h-7 px-3 text-xs font-medium rounded-md transition-all ${weekView ? "bg-card shadow-sm" : "text-muted-foreground"}`}>Semana atual</button>
-              </div>
-            </div>
+            <select className="h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary" value={sectorFilter} onChange={(e) => setSectorFilter(e.target.value)}>
+              <option value="all">Todos os setores</option>
+              {sectors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
           )}
         </div>
 
         {role === "admin" && (
           <HOSupervisorPanel
             period={period}
-            collaborators={collaborators}
+            roster={roster}
             sectors={sectors}
             onOpenPeriod={openPeriod}
             onPatchPeriod={patchPeriod}
@@ -564,6 +753,7 @@ export default function HomeOffice({ collaborators, sectors, role, currentCollab
             onRemoveMeeting={removeMeeting}
             onAddSpecialDay={addSpecialDay}
             onRemoveSpecialDay={removeSpecialDay}
+            onCorrectEntry={correctEntry}
           />
         )}
 
@@ -572,98 +762,109 @@ export default function HomeOffice({ collaborators, sectors, role, currentCollab
         )}
 
         {period && (
-          <div className="flex gap-6 items-start">
-            <div className="flex-1 min-w-0 bg-card border border-border rounded-xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="border-collapse">
-                  <thead>
-                    <tr>
-                      <th className="sticky left-0 bg-card text-left px-3 py-2 text-xs font-medium text-muted-foreground z-10 min-w-[180px]">Colaborador</th>
-                      {visibleDays.map((d) => (
-                        <th key={d} className={`px-1 py-2 text-center text-[10px] font-medium min-w-[44px] ${d === today ? "text-primary" : "text-muted-foreground"} ${meetingDates.has(d) ? "bg-muted" : ""}`}>
-                          <div>{weekdayAbbrev(d)}</div>
-                          <div style={{ fontFamily: "var(--font-mono)" }}>{dayNum(d)}</div>
-                        </th>
-                      ))}
-                    </tr>
-                    {sectorFilter !== "all" && (
-                      <tr>
-                        <th className="sticky left-0 bg-card text-left px-3 pb-2 text-[10px] font-normal text-[var(--tone-subtle)] z-10">Vagas de HO no setor</th>
-                        {visibleDays.map((d) => {
-                          const activeCount = activeMembersBySector.get(sectorFilter)?.length ?? 0;
-                          const max = sectorMaxHO(activeCount);
-                          const used = sectorUsageByDate.get(`${sectorFilter}|${d}`) ?? 0;
-                          const full = used >= max;
-                          return (
-                            <th key={d} className={`px-1 pb-2 text-center text-[10px] font-normal tabular-nums ${full ? "text-red-500" : "text-[var(--tone-subtle)]"}`} style={{ fontFamily: "var(--font-mono)" }}>
-                              {used}/{max}
-                            </th>
-                          );
-                        })}
-                      </tr>
-                    )}
-                  </thead>
-                  <tbody>
-                    {visibleCollaborators.map((c) => {
-                      const dates = entriesByCollaborator.get(c.id) ?? new Set<string>();
-                      const canToggle = period.status === "open" && (role === "admin" || c.id === currentCollaboratorId);
-                      const quota = weeklyQuotaForDate(c.hireDate, today);
-                      const usedThisWeek = [...dates].filter((d) => isoWeekKey(d) === thisWeekKey).length;
-                      const warnings = computeWarnings(period.businessDays, [...dates]);
-                      return (
-                        <tr key={c.id} className="border-t border-[var(--border-4)]">
-                          <td className="sticky left-0 bg-card px-3 py-2 z-10">
-                            <div className="flex items-center gap-2">
-                              <Avatar name={c.name} size={6} />
-                              <div className="min-w-0">
-                                <p className="text-xs font-medium truncate flex items-center gap-1">
-                                  {c.name}
-                                  {warnings.length > 0 && <AlertCircle size={11} className="text-amber-500 shrink-0" title={warnings.join(" · ")} />}
-                                </p>
-                                <p className="text-[10px] text-[var(--tone-subtle)] truncate">{sectorName(c.sectorId)} · {usedThisWeek}/{quota} esta semana</p>
-                              </div>
-                            </div>
-                          </td>
-                          {visibleDays.map((d) => (
-                            <HOCell
-                              key={d}
-                              collaborator={c}
-                              date={d}
-                              on={dates.has(d)}
-                              special={specialByKey.get(`${c.id}|${d}`)}
-                              isMeeting={meetingDates.has(d)}
-                              canToggle={canToggle}
-                              pending={pendingCells.has(`${c.id}|${d}`)}
-                              onToggle={() => toggleCell(c, d, dates.has(d))}
-                            />
-                          ))}
-                        </tr>
-                      );
-                    })}
-                    {visibleCollaborators.length === 0 && (
-                      <tr>
-                        <td colSpan={visibleDays.length + 1} className="px-3 py-8 text-center text-sm text-muted-foreground">Nenhum colaborador ativo neste setor</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+          <>
+            {/* Abas de semana — só o bloco selecionado é exibido por vez */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {weeks.map((week, i) => (
+                <button
+                  key={i}
+                  onClick={() => setSelectedWeekIndex(i)}
+                  className={`shrink-0 px-3 h-9 rounded-lg text-xs font-medium transition-all ${
+                    i === selectedWeekIndex ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Semana {i + 1}
+                  <span className="opacity-70 ml-1.5" style={{ fontFamily: "var(--font-mono)" }}>
+                    {fmtDayMonth(week[0])}–{fmtDayMonth(week[week.length - 1])}
+                  </span>
+                </button>
+              ))}
             </div>
 
-            <div className="w-64 shrink-0 bg-card border border-border rounded-xl p-4 space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Resumo do mês</p>
-              {visibleCollaborators.map((c) => {
-                const count = entriesByCollaborator.get(c.id)?.size ?? 0;
-                return (
-                  <div key={c.id} className="flex items-center gap-2 text-xs">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.color || "var(--tone-line)" }} />
-                    <span className="flex-1 truncate">{c.name}</span>
-                    <span className="text-muted-foreground tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{count}d</span>
-                  </div>
-                );
-              })}
+            <div className="flex gap-6 items-start">
+              <div className="flex-1 min-w-0 bg-card border border-border rounded-xl overflow-hidden">
+                <div className="overflow-x-auto flex">
+                  {selectedWeek.map((date) => {
+                    const meeting = meetingByDate.get(date);
+                    const specialsToday = specialByDate.get(date) ?? [];
+                    const specialByCollaborator = new Map(specialsToday.map((s) => [s.collaboratorId, s.type]));
+
+                    const hoEntries = roster
+                      .filter((c) => c.active)
+                      .filter((c) => sectorFilter === "all" || c.sectorId === sectorFilter || c.id === currentCollaboratorId)
+                      .filter((c) => entriesByCollaborator.get(c.id)?.has(date))
+                      .filter((c) => !specialByCollaborator.has(c.id))
+                      .sort((a, b) => (a.id === currentCollaboratorId ? -1 : b.id === currentCollaboratorId ? 1 : a.name.localeCompare(b.name)));
+
+                    const specialEntries = specialsToday
+                      .map((s) => ({ collaborator: collaboratorsById.get(s.collaboratorId), type: s.type }))
+                      .filter((s): s is { collaborator: HOMember; type: "ferias" | "dayoff" } => !!s.collaborator)
+                      .filter((s) => sectorFilter === "all" || s.collaborator.sectorId === sectorFilter);
+
+                    const ownSpecial = specialByCollaborator.get(currentCollaboratorId);
+                    const selfOn = !!entriesByCollaborator.get(currentCollaboratorId)?.has(date);
+                    const selfBlockedReason = ownSpecial ? (ownSpecial === "ferias" ? "Férias" : "Day off") : meeting ? "Reunião Geral" : undefined;
+                    const canSelfToggle = period.status === "open" && !!currentCollaboratorId && !selfBlockedReason;
+
+                    const teammatesOnHO =
+                      viewerSectorId && !meeting
+                        ? roster.filter(
+                            (c) => c.active && c.sectorId === viewerSectorId && c.id !== currentCollaboratorId && entriesByCollaborator.get(c.id)?.has(date)
+                          ).length
+                        : 0;
+
+                    let sectorCapacityLabel: string | undefined;
+                    let sectorCapacityFull = false;
+                    if (sectorFilter !== "all" && !meeting) {
+                      const activeCount = activeMembersBySector.get(sectorFilter)?.length ?? 0;
+                      const max = sectorMaxHO(activeCount);
+                      const used = sectorUsageByDate.get(`${sectorFilter}|${date}`) ?? 0;
+                      sectorCapacityLabel = `${used}/${max} vagas`;
+                      sectorCapacityFull = used >= max;
+                    }
+
+                    return (
+                      <HODayColumn
+                        key={date}
+                        date={date}
+                        isToday={date === today}
+                        meeting={meeting}
+                        hoEntries={hoEntries}
+                        specialEntries={specialEntries}
+                        warningsByCollaboratorId={warningsByCollaboratorId}
+                        currentCollaboratorId={currentCollaboratorId}
+                        selfOn={selfOn}
+                        selfBlockedReason={selfBlockedReason}
+                        canSelfToggle={canSelfToggle}
+                        pendingSelf={pendingCells.has(`${currentCollaboratorId}|${date}`)}
+                        onToggleSelf={() => {
+                          const self = collaboratorsById.get(currentCollaboratorId);
+                          if (self) toggleEntry(self, date, selfOn);
+                        }}
+                        teammatesOnHO={teammatesOnHO}
+                        sectorCapacityLabel={sectorCapacityLabel}
+                        sectorCapacityFull={sectorCapacityFull}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="w-64 shrink-0 bg-card border border-border rounded-xl p-4 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Resumo do mês</p>
+                {summaryCollaborators.map((c) => {
+                  const count = entriesByCollaborator.get(c.id)?.size ?? 0;
+                  return (
+                    <div key={c.id} className="flex items-center gap-2 text-xs">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.color || "var(--tone-line)" }} />
+                      <span className="flex-1 truncate">{c.name}</span>
+                      <span className="text-muted-foreground tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{count}d</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>

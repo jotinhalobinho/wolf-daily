@@ -3022,7 +3022,6 @@ function MainApp({ user, onLogout, nightMode, onToggleNightMode }: { user: AuthU
 
       {view === "homeoffice" && (
         <HomeOffice
-          collaborators={collaborators}
           sectors={sectors}
           role={role}
           currentCollaboratorId={currentCollaboratorId}

@@ -63,6 +63,28 @@ async function loadPeriod(row) {
   };
 }
 
+// GET /api/home-office/roster -> equipe inteira, só os campos necessários pra
+// montar a escala (nome, cor, setor, admissão, ativo) — NUNCA salário/aniversário/
+// cargo. A escala é visível pra todo mundo (diferente do Rateio Mensal, que
+// restringe /api/collaborators ao próprio registro por privacidade salarial),
+// então esse endpoint existe à parte pra não precisar afrouxar aquela restrição.
+router.get(
+  "/roster",
+  asyncHandler(async (req, res) => {
+    const rows = await db.all("SELECT id, name, color, sector_id, hire_date, active FROM collaborators ORDER BY name ASC");
+    res.json(
+      rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        color: r.color || undefined,
+        sectorId: r.sector_id || undefined,
+        hireDate: r.hire_date || undefined,
+        active: !!r.active,
+      }))
+    );
+  })
+);
+
 // GET /api/home-office/periods -> lista leve, igual releases
 router.get(
   "/periods",
