@@ -95,6 +95,20 @@ function computeWeeks(businessDays: string[]): string[][] {
   return weeks;
 }
 
+// Encaixa os dias úteis de uma semana nas 5 posições fixas (Segunda..Sexta),
+// deixando null onde não há dia útil (feriado no meio, ou semana parcial no
+// início/fim do mês) — assim toda coluna de dia fica sempre do mesmo
+// tamanho (1/5 da linha), em vez de esticar quando a semana tem menos dias.
+function weekSlots(week: string[]): (string | null)[] {
+  const slots: (string | null)[] = [null, null, null, null, null];
+  for (const d of week) {
+    const [y, m, day] = d.split("-").map(Number);
+    const weekday = new Date(y, m - 1, day).getDay(); // 1=segunda..5=sexta
+    if (weekday >= 1 && weekday <= 5) slots[weekday - 1] = d;
+  }
+  return slots;
+}
+
 // "AAAA-Www" -> { year, week } pra comparar semanas consecutivas.
 function parseWeekKey(key: string): { year: number; week: number } | null {
   const m = /^(\d{4})-W(\d{2})$/.exec(key);
@@ -870,8 +884,10 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
                         </span>
                       </p>
                     </div>
-                    <div className="grid" style={{ gridTemplateColumns: `repeat(${week.length}, minmax(0, 1fr))` }}>
-                      {week.map((date) => renderDayColumn(date))}
+                    <div className="grid grid-cols-5">
+                      {weekSlots(week).map((date, slot) =>
+                        date ? renderDayColumn(date) : <div key={slot} className="border-r border-border last:border-r-0" />
+                      )}
                     </div>
                   </div>
                 ))}
