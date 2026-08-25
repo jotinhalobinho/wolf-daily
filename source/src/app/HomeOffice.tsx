@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "./api";
 import { Lock, Unlock, ChevronDown, ChevronUp, Plus, Trash2, AlertCircle, Info, Users as UsersIcon, X, Wrench } from "lucide-react";
 import { Sector, fmtDate, MONTHS } from "./App";
@@ -560,7 +560,14 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period?.id]);
 
-  const selectedWeek = weeks[selectedWeekIndex] ?? [];
+  // O mês inteiro fica visível, um card de semana embaixo do outro — as abas
+  // de semana só rolam a tela até o bloco escolhido (âncora), sem esconder
+  // as outras semanas.
+  const weekRefs = useRef<(HTMLDivElement | null)[]>([]);
+  function goToWeek(i: number) {
+    setSelectedWeekIndex(i);
+    weekRefs.current[i]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   const entriesByCollaborator = useMemo(() => {
     const map = new Map<string, Set<string>>();
@@ -720,6 +727,72 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
     toggleEntry(collaborator, date, currentlyOn);
   }
 
+  // Monta a coluna de um dia — usada pra todas as semanas do mês, já que
+  // agora todos os blocos ficam visíveis ao mesmo tempo (um embaixo do outro).
+  function renderDayColumn(date: string) {
+    const meeting = meetingByDate.get(date);
+    const specialsToday = specialByDate.get(date) ?? [];
+    const specialByCollaborator = new Map(specialsToday.map((s) => [s.collaboratorId, s.type]));
+
+    const hoEntries = roster
+      .filter((c) => c.active)
+      .filter((c) => sectorFilter === "all" || c.sectorId === sectorFilter || c.id === currentCollaboratorId)
+      .filter((c) => entriesByCollaborator.get(c.id)?.has(date))
+      .filter((c) => !specialByCollaborator.has(c.id))
+      .sort((a, b) => (a.id === currentCollaboratorId ? -1 : b.id === currentCollaboratorId ? 1 : a.name.localeCompare(b.name)));
+
+    const specialEntries = specialsToday
+      .map((s) => ({ collaborator: collaboratorsById.get(s.collaboratorId), type: s.type }))
+      .filter((s): s is { collaborator: HOMember; type: "ferias" | "dayoff" } => !!s.collaborator)
+      .filter((s) => sectorFilter === "all" || s.collaborator.sectorId === sectorFilter);
+
+    const ownSpecial = specialByCollaborator.get(currentCollaboratorId);
+    const selfOn = !!entriesByCollaborator.get(currentCollaboratorId)?.has(date);
+    const selfBlockedReason = ownSpecial ? (ownSpecial === "ferias" ? "Férias" : "Day off") : meeting ? "Reunião Geral" : undefined;
+    const canSelfToggle = !!period && period.status === "open" && !!currentCollaboratorId && !selfBlockedReason;
+
+    const teammatesOnHO =
+      viewerSectorId && !meeting
+        ? roster.filter(
+            (c) => c.active && c.sectorId === viewerSectorId && c.id !== currentCollaboratorId && entriesByCollaborator.get(c.id)?.has(date)
+          ).length
+        : 0;
+
+    let sectorCapacityLabel: string | undefined;
+    let sectorCapacityFull = false;
+    if (sectorFilter !== "all" && !meeting) {
+      const activeCount = activeMembersBySector.get(sectorFilter)?.length ?? 0;
+      const max = sectorMaxHO(activeCount);
+      const used = sectorUsageByDate.get(`${sectorFilter}|${date}`) ?? 0;
+      sectorCapacityLabel = `${used}/${max} vagas`;
+      sectorCapacityFull = used >= max;
+    }
+
+    return (
+      <HODayColumn
+        key={date}
+        date={date}
+        isToday={date === today}
+        meeting={meeting}
+        hoEntries={hoEntries}
+        specialEntries={specialEntries}
+        warningsByCollaboratorId={warningsByCollaboratorId}
+        currentCollaboratorId={currentCollaboratorId}
+        selfOn={selfOn}
+        selfBlockedReason={selfBlockedReason}
+        canSelfToggle={canSelfToggle}
+        pendingSelf={pendingCells.has(`${currentCollaboratorId}|${date}`)}
+        onToggleSelf={() => {
+          const self = collaboratorsById.get(currentCollaboratorId);
+          if (self) toggleEntry(self, date, selfOn);
+        }}
+        teammatesOnHO={teammatesOnHO}
+        sectorCapacityLabel={sectorCapacityLabel}
+        sectorCapacityFull={sectorCapacityFull}
+      />
+    );
+  }
+
   if (loading) {
     return <div className="flex-1 flex items-center justify-center text-sm text-[var(--tone-subtle)]">Carregando…</div>;
   }
@@ -763,12 +836,14 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
 
         {period && (
           <>
-            {/* Abas de semana — só o bloco selecionado é exibido por vez */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {/* Abas de semana — âncoras: rolam até o card daquela semana, sem
+                esconder as outras. O mês inteiro fica visível, um card de
+                semana embaixo do outro. */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 sticky top-0 bg-background z-20 py-1 -mx-8 px-8">
               {weeks.map((week, i) => (
                 <button
                   key={i}
-                  onClick={() => setSelectedWeekIndex(i)}
+                  onClick={() => goToWeek(i)}
                   className={`shrink-0 px-3 h-9 rounded-lg text-xs font-medium transition-all ${
                     i === selectedWeekIndex ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
                   }`}
@@ -782,75 +857,27 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
             </div>
 
             <div className="flex gap-6 items-start">
-              <div className="flex-1 min-w-0 bg-card border border-border rounded-xl overflow-hidden">
-                <div className="overflow-x-auto flex">
-                  {selectedWeek.map((date) => {
-                    const meeting = meetingByDate.get(date);
-                    const specialsToday = specialByDate.get(date) ?? [];
-                    const specialByCollaborator = new Map(specialsToday.map((s) => [s.collaboratorId, s.type]));
-
-                    const hoEntries = roster
-                      .filter((c) => c.active)
-                      .filter((c) => sectorFilter === "all" || c.sectorId === sectorFilter || c.id === currentCollaboratorId)
-                      .filter((c) => entriesByCollaborator.get(c.id)?.has(date))
-                      .filter((c) => !specialByCollaborator.has(c.id))
-                      .sort((a, b) => (a.id === currentCollaboratorId ? -1 : b.id === currentCollaboratorId ? 1 : a.name.localeCompare(b.name)));
-
-                    const specialEntries = specialsToday
-                      .map((s) => ({ collaborator: collaboratorsById.get(s.collaboratorId), type: s.type }))
-                      .filter((s): s is { collaborator: HOMember; type: "ferias" | "dayoff" } => !!s.collaborator)
-                      .filter((s) => sectorFilter === "all" || s.collaborator.sectorId === sectorFilter);
-
-                    const ownSpecial = specialByCollaborator.get(currentCollaboratorId);
-                    const selfOn = !!entriesByCollaborator.get(currentCollaboratorId)?.has(date);
-                    const selfBlockedReason = ownSpecial ? (ownSpecial === "ferias" ? "Férias" : "Day off") : meeting ? "Reunião Geral" : undefined;
-                    const canSelfToggle = period.status === "open" && !!currentCollaboratorId && !selfBlockedReason;
-
-                    const teammatesOnHO =
-                      viewerSectorId && !meeting
-                        ? roster.filter(
-                            (c) => c.active && c.sectorId === viewerSectorId && c.id !== currentCollaboratorId && entriesByCollaborator.get(c.id)?.has(date)
-                          ).length
-                        : 0;
-
-                    let sectorCapacityLabel: string | undefined;
-                    let sectorCapacityFull = false;
-                    if (sectorFilter !== "all" && !meeting) {
-                      const activeCount = activeMembersBySector.get(sectorFilter)?.length ?? 0;
-                      const max = sectorMaxHO(activeCount);
-                      const used = sectorUsageByDate.get(`${sectorFilter}|${date}`) ?? 0;
-                      sectorCapacityLabel = `${used}/${max} vagas`;
-                      sectorCapacityFull = used >= max;
-                    }
-
-                    return (
-                      <HODayColumn
-                        key={date}
-                        date={date}
-                        isToday={date === today}
-                        meeting={meeting}
-                        hoEntries={hoEntries}
-                        specialEntries={specialEntries}
-                        warningsByCollaboratorId={warningsByCollaboratorId}
-                        currentCollaboratorId={currentCollaboratorId}
-                        selfOn={selfOn}
-                        selfBlockedReason={selfBlockedReason}
-                        canSelfToggle={canSelfToggle}
-                        pendingSelf={pendingCells.has(`${currentCollaboratorId}|${date}`)}
-                        onToggleSelf={() => {
-                          const self = collaboratorsById.get(currentCollaboratorId);
-                          if (self) toggleEntry(self, date, selfOn);
-                        }}
-                        teammatesOnHO={teammatesOnHO}
-                        sectorCapacityLabel={sectorCapacityLabel}
-                        sectorCapacityFull={sectorCapacityFull}
-                      />
-                    );
-                  })}
-                </div>
+              <div className="flex-1 min-w-0 space-y-4">
+                {weeks.map((week, i) => (
+                  <div
+                    key={i}
+                    ref={(el) => { weekRefs.current[i] = el; }}
+                    className="bg-card border border-border rounded-xl overflow-hidden scroll-mt-16"
+                  >
+                    <div className="px-4 py-2 border-b border-border bg-muted/40">
+                      <p className="text-xs font-semibold">
+                        Semana {i + 1}
+                        <span className="text-muted-foreground font-normal ml-1.5" style={{ fontFamily: "var(--font-mono)" }}>
+                          · {fmtDayMonth(week[0])}–{fmtDayMonth(week[week.length - 1])}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="overflow-x-auto flex">{week.map((date) => renderDayColumn(date))}</div>
+                  </div>
+                ))}
               </div>
 
-              <div className="w-64 shrink-0 bg-card border border-border rounded-xl p-4 space-y-2">
+              <div className="w-64 shrink-0 bg-card border border-border rounded-xl p-4 space-y-2 sticky top-16">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Resumo do mês</p>
                 {summaryCollaborators.map((c) => {
                   const count = entriesByCollaborator.get(c.id)?.size ?? 0;
