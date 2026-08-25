@@ -183,4 +183,19 @@ CREATE TABLE IF NOT EXISTS ho_general_meetings (
     FOREIGN KEY (period_id) REFERENCES ho_periods(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Troca de feriado: o feriado (holiday_date) vira dia útil (trabalhado) e o
+-- dia escolhido (compensation_date) vira a folga no lugar dele — ninguém
+-- trabalha nele, nem presencial nem home office.
+CREATE TABLE IF NOT EXISTS ho_holiday_overrides (
+  id                INT AUTO_INCREMENT PRIMARY KEY,
+  period_id         VARCHAR(64) NOT NULL,
+  holiday_date      DATE NOT NULL,
+  compensation_date DATE NOT NULL,
+  created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_ho_override_holiday UNIQUE (period_id, holiday_date),
+  CONSTRAINT uq_ho_override_compensation UNIQUE (period_id, compensation_date),
+  CONSTRAINT fk_ho_override_period
+    FOREIGN KEY (period_id) REFERENCES ho_periods(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 SET FOREIGN_KEY_CHECKS = 1;

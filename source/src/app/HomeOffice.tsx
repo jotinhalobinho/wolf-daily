@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "./api";
-import { Lock, Unlock, ChevronDown, ChevronUp, Plus, Trash2, AlertCircle, Info, Users as UsersIcon, X, Wrench } from "lucide-react";
+import { Lock, Unlock, ChevronDown, ChevronUp, Plus, Trash2, AlertCircle, Info, Users as UsersIcon, X, Wrench, PartyPopper, CalendarOff, ArrowLeftRight } from "lucide-react";
 import { Sector, fmtDate, MONTHS } from "./App";
 import { weeklyQuotaForDate, isoWeekKey, sectorMaxHO } from "./homeOfficeRules";
 
@@ -37,6 +37,30 @@ interface HOMeeting {
   title: string;
 }
 
+// Feriado nacional do mês (lista fixa, vem de holidays.js no servidor).
+interface HOHoliday {
+  date: string;
+  name: string;
+  facultativo?: boolean;
+}
+
+// Uma troca de feriado ativa: o feriado virou dia útil (trabalhado) e a data
+// de compensação virou a folga no lugar dele.
+interface HOHolidayOverride {
+  id: number;
+  holidayDate: string;
+  compensationDate: string;
+}
+
+// Dia útil (segunda a sexta) que não está disponível pra marcar HO por causa
+// de um feriado não trocado, ou por ser a folga de compensação de um feriado
+// que foi trocado — aparece na grade como um cartão bloqueado, com o motivo.
+interface HOFlaggedDay {
+  date: string;
+  type: "holiday" | "compensation";
+  name: string;
+}
+
 interface HOPeriod {
   id: string;
   month: number; // 0-indexado, igual releases.month
@@ -45,6 +69,9 @@ interface HOPeriod {
   deadline: string;
   approvedAt?: string;
   businessDays: string[];
+  flaggedDays: HOFlaggedDay[];
+  holidays: HOHoliday[];
+  holidayOverrides: HOHolidayOverride[];
   generalMeetings: HOMeeting[];
   entries: HOEntry[];
   specialDays: HOSpecialDay[];
@@ -216,6 +243,7 @@ interface HODayColumnProps {
   date: string;
   isToday: boolean;
   meeting?: HOMeeting;
+  flaggedDay?: HOFlaggedDay;
   hoEntries: HOMember[]; // quem está de HO nesse dia, já filtrado pelo setor
   specialEntries: { collaborator: HOMember; type: "ferias" | "dayoff" }[];
   sectorColorById: Map<string, string | undefined>;
@@ -236,6 +264,7 @@ function HODayColumn({
   date,
   isToday,
   meeting,
+  flaggedDay,
   hoEntries,
   specialEntries,
   sectorColorById,
@@ -257,7 +286,22 @@ function HODayColumn({
         <p className="text-[10px] text-muted-foreground" style={{ fontFamily: "var(--font-mono)" }}>{fmtDayMonth(date)}</p>
       </div>
       <div className="p-2 space-y-1.5 flex-1">
-        {meeting ? (
+        {flaggedDay ? (
+          <div
+            className="rounded-lg bg-[var(--tone-subtle)]/15 border border-dashed border-[var(--tone-subtle)] p-3 text-center"
+            title={flaggedDay.type === "holiday" ? `Feriado: ${flaggedDay.name} — ninguém trabalha neste dia` : flaggedDay.name}
+          >
+            {flaggedDay.type === "holiday" ? (
+              <PartyPopper size={16} className="mx-auto mb-1 text-muted-foreground" />
+            ) : (
+              <CalendarOff size={16} className="mx-auto mb-1 text-muted-foreground" />
+            )}
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {flaggedDay.type === "holiday" ? "Feriado" : "Folga"}
+            </p>
+            <p className="text-[10px] text-[var(--tone-subtle)] mt-0.5 truncate">{flaggedDay.name}</p>
+          </div>
+        ) : meeting ? (
           <div className="rounded-lg bg-[var(--tone-subtle)]/15 border border-dashed border-[var(--tone-subtle)] p-3 text-center" title={meeting.title || "Reunião Geral — sem home office pra ninguém neste dia"}>
             <UsersIcon size={16} className="mx-auto mb-1 text-muted-foreground" />
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Reunião Geral</p>
@@ -316,6 +360,9 @@ interface HOSupervisorPanelProps {
   onPatchPeriod: (patch: { deadline?: string; status?: "open" | "approved" }) => void;
   onAddMeeting: (date: string, title: string) => void;
   onRemoveMeeting: (id: number) => void;
+  onRescheduleMeeting: (meetingId: number, newDate: string) => void;
+  onAddHolidayOverride: (holidayDate: string, compensationDate: string) => void;
+  onRemoveHolidayOverride: (id: number) => void;
   onAddSpecialDay: (collaboratorId: string, date: string, type: "ferias" | "dayoff") => void;
   onRemoveSpecialDay: (id: number) => void;
   onCorrectEntry: (collaboratorId: string, date: string, currentlyOn: boolean) => void;
@@ -329,6 +376,9 @@ function HOSupervisorPanel({
   onPatchPeriod,
   onAddMeeting,
   onRemoveMeeting,
+  onRescheduleMeeting,
+  onAddHolidayOverride,
+  onRemoveHolidayOverride,
   onAddSpecialDay,
   onRemoveSpecialDay,
   onCorrectEntry,
@@ -341,6 +391,10 @@ function HOSupervisorPanel({
   const [deadlineDraft, setDeadlineDraft] = useState(period?.deadline ?? "");
   const [meetingDate, setMeetingDate] = useState("");
   const [meetingTitle, setMeetingTitle] = useState("");
+  const [reschedulingMeetingId, setReschedulingMeetingId] = useState<number | null>(null);
+  const [rescheduleDraft, setRescheduleDraft] = useState("");
+  const [tradingHolidayDate, setTradingHolidayDate] = useState<string | null>(null);
+  const [compensationDraft, setCompensationDraft] = useState("");
   const [specialCollaboratorId, setSpecialCollaboratorId] = useState("");
   const [specialDate, setSpecialDate] = useState("");
   const [specialType, setSpecialType] = useState<"ferias" | "dayoff">("ferias");
@@ -359,6 +413,12 @@ function HOSupervisorPanel({
     }
     return map;
   }, [roster]);
+
+  const overrideByHolidayDate = useMemo(() => {
+    const map = new Map<string, HOHolidayOverride>();
+    for (const o of period?.holidayOverrides ?? []) map.set(o.holidayDate, o);
+    return map;
+  }, [period]);
 
   const correctionCurrentlyOn = useMemo(() => {
     if (!period || !correctionCollaboratorId || !correctionDate) return false;
@@ -431,17 +491,50 @@ function HOSupervisorPanel({
 
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Reunião Geral (bloqueia HO pra empresa inteira no dia)</p>
-                <div className="flex flex-wrap gap-1.5 mb-2">
+                <div className="flex flex-col gap-1.5 mb-2">
                   {period.generalMeetings.map((m) => (
-                    <span key={m.id} className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-muted">
-                      {fmtDate(m.date)}{m.title ? ` — ${m.title}` : ""}
-                      {period.status === "open" && (
-                        <button onClick={() => onRemoveMeeting(m.id)} className="text-[var(--tone-subtle)] hover:text-red-500"><Trash2 size={10} /></button>
+                    <div key={m.id} className="flex flex-wrap items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-muted">
+                        {fmtDate(m.date)}{m.title ? ` — ${m.title}` : ""}
+                        {period.status === "open" && (
+                          <>
+                            <button
+                              onClick={() => { setReschedulingMeetingId(m.id); setRescheduleDraft(m.date); }}
+                              title="Remarcar pra outro dia"
+                              className="text-[var(--tone-subtle)] hover:text-primary"
+                            >
+                              <ArrowLeftRight size={10} />
+                            </button>
+                            <button onClick={() => onRemoveMeeting(m.id)} className="text-[var(--tone-subtle)] hover:text-red-500"><Trash2 size={10} /></button>
+                          </>
+                        )}
+                      </span>
+                      {reschedulingMeetingId === m.id && (
+                        <div className="flex items-center gap-1.5 bg-input-background rounded-lg px-2 py-1">
+                          <span className="text-[10px] text-muted-foreground">Nova data:</span>
+                          <input
+                            type="date"
+                            className="h-7 px-2 text-xs bg-background border border-border rounded-md outline-none focus:border-primary"
+                            value={rescheduleDraft}
+                            onChange={(e) => setRescheduleDraft(e.target.value)}
+                          />
+                          <button
+                            onClick={() => { onRescheduleMeeting(m.id, rescheduleDraft); setReschedulingMeetingId(null); }}
+                            disabled={!rescheduleDraft}
+                            className="h-7 px-2 text-xs font-medium bg-primary text-primary-foreground rounded-md disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Confirmar
+                          </button>
+                          <button onClick={() => setReschedulingMeetingId(null)} className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground">Cancelar</button>
+                        </div>
                       )}
-                    </span>
+                    </div>
                   ))}
                   {period.generalMeetings.length === 0 && <span className="text-xs text-[var(--tone-subtle)]">Nenhuma marcada</span>}
                 </div>
+                <p className="text-[10px] text-[var(--tone-subtle)] mb-2">
+                  Remarcar move quem já estava de home office no dia novo pro dia antigo, que fica livre.
+                </p>
                 {period.status === "open" && (
                   <div className="flex flex-wrap items-center gap-2">
                     <input type="date" className="h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary" value={meetingDate} onChange={(e) => setMeetingDate(e.target.value)} />
@@ -455,6 +548,61 @@ function HOSupervisorPanel({
                     </button>
                   </div>
                 )}
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Feriados do mês</p>
+                <div className="space-y-1.5">
+                  {period.holidays.map((h) => {
+                    const override = overrideByHolidayDate.get(h.date);
+                    return (
+                      <div key={h.date} className="flex flex-wrap items-center gap-1.5">
+                        <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-muted">
+                          {fmtDate(h.date)} — {h.name}
+                          {override && (
+                            <span className="text-emerald-600"> · trabalhado, folga em {fmtDate(override.compensationDate)}</span>
+                          )}
+                        </span>
+                        {period.status === "open" && (
+                          override ? (
+                            <button
+                              onClick={() => onRemoveHolidayOverride(override.id)}
+                              className="text-xs text-muted-foreground hover:text-red-500 underline decoration-dotted"
+                            >
+                              Desfazer troca
+                            </button>
+                          ) : tradingHolidayDate === h.date ? (
+                            <div className="flex items-center gap-1.5 bg-input-background rounded-lg px-2 py-1">
+                              <span className="text-[10px] text-muted-foreground">Folga em:</span>
+                              <input
+                                type="date"
+                                className="h-7 px-2 text-xs bg-background border border-border rounded-md outline-none focus:border-primary"
+                                value={compensationDraft}
+                                onChange={(e) => setCompensationDraft(e.target.value)}
+                              />
+                              <button
+                                onClick={() => { onAddHolidayOverride(h.date, compensationDraft); setTradingHolidayDate(null); setCompensationDraft(""); }}
+                                disabled={!compensationDraft}
+                                className="h-7 px-2 text-xs font-medium bg-primary text-primary-foreground rounded-md disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                Confirmar
+                              </button>
+                              <button onClick={() => setTradingHolidayDate(null)} className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground">Cancelar</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => { setTradingHolidayDate(h.date); setCompensationDraft(""); }}
+                              className="text-xs text-muted-foreground hover:text-primary underline decoration-dotted"
+                            >
+                              Trocar por outro dia
+                            </button>
+                          )
+                        )}
+                      </div>
+                    );
+                  })}
+                  {period.holidays.length === 0 && <span className="text-xs text-[var(--tone-subtle)]">Nenhum feriado neste mês</span>}
+                </div>
               </div>
 
               <div>
@@ -578,7 +726,21 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
 
   const today = todayISO();
 
-  const weeks = useMemo(() => (period ? computeWeeks(period.businessDays) : []), [period]);
+  // A grade mostra os dias úteis normais E os dias sinalizados (feriado não
+  // trocado, ou folga de compensação) — só assim dá pra sinalizar o feriado
+  // no lugar dele em vez de simplesmente escondê-lo do mês.
+  const allVisibleDays = useMemo(() => {
+    if (!period) return [];
+    return [...period.businessDays, ...period.flaggedDays.map((f) => f.date)].sort();
+  }, [period]);
+
+  const flaggedDayByDate = useMemo(() => {
+    const map = new Map<string, HOFlaggedDay>();
+    for (const f of period?.flaggedDays ?? []) map.set(f.date, f);
+    return map;
+  }, [period]);
+
+  const weeks = useMemo(() => (period ? computeWeeks(allVisibleDays) : []), [period, allVisibleDays]);
 
   // Ao trocar de período, volta pro filtro "Mês" (vê o mês inteiro de novo).
   useEffect(() => {
@@ -737,6 +899,46 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
       .catch((e) => alert(e.message));
   }
 
+  function rescheduleMeeting(meetingId: number, newDate: string) {
+    if (!period) return;
+    apiPatch(`/home-office/meetings/${meetingId}`, { date: newDate })
+      .then((res: { movedCollaboratorIds: string[]; blockedCollaboratorIds: string[] }) => {
+        const names = (ids: string[]) => ids.map((id) => roster.find((c) => c.id === id)?.name ?? id).join(", ");
+        const parts: string[] = [];
+        if (res.movedCollaboratorIds?.length) parts.push(`Home office movido pro dia antigo: ${names(res.movedCollaboratorIds)}.`);
+        if (res.blockedCollaboratorIds?.length) parts.push(`Não coube no dia antigo (setor sem vaga) e precisa remarcar: ${names(res.blockedCollaboratorIds)}.`);
+        if (parts.length) alert(parts.join(" "));
+        return apiGet(`/home-office/periods/${period.id}`).then(refreshPeriod);
+      })
+      .catch((e) => alert(e.message));
+  }
+
+  function addHolidayOverride(holidayDate: string, compensationDate: string) {
+    if (!period) return;
+    apiPost(`/home-office/periods/${period.id}/holiday-overrides`, { holidayDate, compensationDate })
+      .then((res: { affectedCollaboratorIds: string[] }) => {
+        if (res.affectedCollaboratorIds?.length) {
+          const names = res.affectedCollaboratorIds.map((id) => roster.find((c) => c.id === id)?.name ?? id).join(", ");
+          alert(`Home office removido no dia de compensação para: ${names}`);
+        }
+        return apiGet(`/home-office/periods/${period.id}`).then(refreshPeriod);
+      })
+      .catch((e) => alert(e.message));
+  }
+
+  function removeHolidayOverride(id: number) {
+    if (!period) return;
+    apiDelete(`/home-office/holiday-overrides/${id}`)
+      .then((res: { affectedCollaboratorIds: string[] }) => {
+        if (res.affectedCollaboratorIds?.length) {
+          const names = res.affectedCollaboratorIds.map((id) => roster.find((c) => c.id === id)?.name ?? id).join(", ");
+          alert(`Home office removido no feriado para: ${names}`);
+        }
+        return apiGet(`/home-office/periods/${period.id}`).then(refreshPeriod);
+      })
+      .catch((e) => alert(e.message));
+  }
+
   function addSpecialDay(collaboratorId: string, date: string, type: "ferias" | "dayoff") {
     if (!period) return;
     apiPost(`/home-office/periods/${period.id}/special-days`, { collaboratorId, date, type })
@@ -760,6 +962,7 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
   // Monta a coluna de um dia — usada pra todas as semanas do mês, já que
   // agora todos os blocos ficam visíveis ao mesmo tempo (um embaixo do outro).
   function renderDayColumn(date: string) {
+    const flaggedDay = flaggedDayByDate.get(date);
     const meeting = meetingByDate.get(date);
     const specialsToday = specialByDate.get(date) ?? [];
     const specialByCollaborator = new Map(specialsToday.map((s) => [s.collaboratorId, s.type]));
@@ -786,7 +989,7 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
     // de aviso em dia com vaga sobrando, mesmo que já tenha gente de HO.
     const relevantSectorId = sectorFilter !== "all" ? sectorFilter : viewerSectorId;
     let sectorFullWarning: string | undefined;
-    if (relevantSectorId && !meeting) {
+    if (relevantSectorId && !meeting && !flaggedDay) {
       const activeCount = activeMembersBySector.get(relevantSectorId)?.length ?? 0;
       const max = sectorMaxHO(activeCount);
       const used = sectorUsageByDate.get(`${relevantSectorId}|${date}`) ?? 0;
@@ -802,6 +1005,7 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
         date={date}
         isToday={date === today}
         meeting={meeting}
+        flaggedDay={flaggedDay}
         hoEntries={hoEntries}
         specialEntries={specialEntries}
         sectorColorById={sectorColorById}
@@ -851,6 +1055,9 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
             onPatchPeriod={patchPeriod}
             onAddMeeting={addMeeting}
             onRemoveMeeting={removeMeeting}
+            onRescheduleMeeting={rescheduleMeeting}
+            onAddHolidayOverride={addHolidayOverride}
+            onRemoveHolidayOverride={removeHolidayOverride}
             onAddSpecialDay={addSpecialDay}
             onRemoveSpecialDay={removeSpecialDay}
             onCorrectEntry={correctEntry}
