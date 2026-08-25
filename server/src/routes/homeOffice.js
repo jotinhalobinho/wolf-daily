@@ -124,15 +124,18 @@ async function loadPeriod(row) {
 }
 
 // GET /api/home-office/roster -> equipe inteira, só os campos necessários pra
-// montar a escala (nome, setor, admissão, ativo) — NUNCA salário/aniversário/
-// cargo. A cor da tag é do setor (ver /api/sectors), não vem daqui. A escala
-// é visível pra todo mundo (diferente do Rateio Mensal, que restringe
-// /api/collaborators ao próprio registro por privacidade salarial), então
-// esse endpoint existe à parte pra não precisar afrouxar aquela restrição.
+// montar a escala (nome, setor, admissão, ativo, estagiário) — NUNCA
+// salário/aniversário/cargo. A cor da tag é do setor (ver /api/sectors), não
+// vem daqui. A escala é visível pra todo mundo (diferente do Rateio Mensal,
+// que restringe /api/collaborators ao próprio registro por privacidade
+// salarial), então esse endpoint existe à parte pra não precisar afrouxar
+// aquela restrição.
 router.get(
   "/roster",
   asyncHandler(async (req, res) => {
-    const rows = await db.all("SELECT id, name, sector_id, hire_date, active FROM collaborators ORDER BY name ASC");
+    const rows = await db.all(
+      "SELECT id, name, sector_id, hire_date, active, is_intern FROM collaborators ORDER BY name ASC"
+    );
     res.json(
       rows.map((r) => ({
         id: r.id,
@@ -140,6 +143,7 @@ router.get(
         sectorId: r.sector_id || undefined,
         hireDate: r.hire_date || undefined,
         active: !!r.active,
+        isIntern: !!r.is_intern,
       }))
     );
   })
@@ -545,6 +549,12 @@ router.post(
     const ctx = await requireEntryAccess(req, res, req.params.id, collaboratorId);
     if (!ctx) return;
     const { period, collaborator } = ctx;
+
+    // Regra sem exceção, independente de tempo de casa: estagiário não tem
+    // direito a home office.
+    if (collaborator.is_intern) {
+      return res.status(400).json({ error: "Estagiários não têm direito a home office" });
+    }
 
     if (!isDateInPeriod(date, period)) return res.status(400).json({ error: "Data inválida para este período" });
     const overrideRowsForEntry = await loadHolidayOverrides(period.id);

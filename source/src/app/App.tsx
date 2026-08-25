@@ -32,6 +32,7 @@ export interface Collaborator {
   sectorId?: string;
   hireDate?: string; // "YYYY-MM-DD" — define a cota semanal automática de HO
   active: boolean; // conta pro mínimo presencial do setor quando true
+  isIntern: boolean; // estagiário nunca tem direito a home office, sem exceção
 }
 
 // Setor/área — nome + cor da tag (todo mundo do mesmo setor usa a mesma cor
@@ -499,6 +500,7 @@ function CollaboratorForm({ initial, workingDays, sectors, onSave, onCancel }: C
   const [sectorId, setSectorId] = useState(initial?.sectorId ?? "");
   const [hireDate, setHireDate] = useState(initial?.hireDate ?? "");
   const [active, setActive] = useState(initial?.active ?? true);
+  const [isIntern, setIsIntern] = useState(initial?.isIntern ?? false);
   const salaryNum = parseFloat(salary.replace(",", ".")) || 0;
   const daily = workingDays > 0 ? salaryNum / workingDays : 0;
   const valid = name.trim() && role.trim() && salaryNum > 0;
@@ -561,6 +563,13 @@ function CollaboratorForm({ initial, workingDays, sectors, onSave, onCancel }: C
           </div>
           <Switch checked={active} onCheckedChange={setActive} />
         </div>
+        <div className="flex items-center justify-between px-1">
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground">Estagiário</label>
+            <p className="text-[10px] text-[var(--tone-subtle)] mt-0.5">Estagiários não têm direito a home office, independente do tempo de casa</p>
+          </div>
+          <Switch checked={isIntern} onCheckedChange={setIsIntern} />
+        </div>
       </div>
       <div className="flex items-center justify-end gap-2 pt-1">
         <button onClick={onCancel} className="h-8 px-4 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-input-background transition-all">Cancelar</button>
@@ -568,7 +577,7 @@ function CollaboratorForm({ initial, workingDays, sectors, onSave, onCancel }: C
             limpos, pra garantir que o JSON enviado ao servidor tenha a chave
             e ele saiba que é pra apagar o valor — undefined simplesmente
             some do corpo da requisição (JSON.stringify descarta a chave). */}
-        <button onClick={() => valid && onSave({ name: name.trim(), role: role.trim(), salary: salaryNum, birthDate, sectorId: sectorId || "", hireDate, active })} disabled={!valid} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">Salvar</button>
+        <button onClick={() => valid && onSave({ name: name.trim(), role: role.trim(), salary: salaryNum, birthDate, sectorId: sectorId || "", hireDate, active, isIntern })} disabled={!valid} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">Salvar</button>
       </div>
     </div>
   );
@@ -2295,6 +2304,7 @@ function ColaboradoresView({ collaborators, setCollaborators, workingDays, secto
                         <Avatar name={c.name} />
                         <span className="text-sm font-medium">{c.name}</span>
                         {!c.active && <span className="text-[9px] font-medium uppercase tracking-wider text-[var(--tone-subtle)] border border-border rounded px-1 py-0.5">Inativo</span>}
+                        {c.isIntern && <span className="text-[9px] font-medium uppercase tracking-wider text-[var(--tone-subtle)] border border-border rounded px-1 py-0.5" title="Sem direito a home office">Estagiário</span>}
                       </div>
                     </td>
                     <td className="px-5 py-3 text-sm text-muted-foreground">{c.role}</td>

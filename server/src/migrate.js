@@ -106,6 +106,12 @@ async function runMigrations() {
     await db.run("ALTER TABLE collaborators ADD COLUMN active TINYINT(1) NOT NULL DEFAULT 1 AFTER hire_date");
     console.log("  [migração] coluna collaborators.active criada.");
   }
+  // Estagiários não têm direito a home office, independente do tempo de
+  // casa — checado em POST /home-office/.../entries, ver homeOffice.js.
+  if (!(await columnExists("collaborators", "is_intern"))) {
+    await db.run("ALTER TABLE collaborators ADD COLUMN is_intern TINYINT(1) NOT NULL DEFAULT 0 AFTER active");
+    console.log("  [migração] coluna collaborators.is_intern criada.");
+  }
   if (!(await constraintExists("collaborators", "fk_collaborators_sector"))) {
     await db.run(
       "ALTER TABLE collaborators ADD CONSTRAINT fk_collaborators_sector FOREIGN KEY (sector_id) REFERENCES sectors(id) ON DELETE SET NULL"
