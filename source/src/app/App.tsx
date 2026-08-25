@@ -6,7 +6,7 @@ import {
   ChevronDown, CheckCircle2, AlertCircle, Clock, FileSpreadsheet, Printer,
   Trash2, Pencil, X, Check, Zap, Lock, Unlock, Shield,
   User, ChevronRight, CalendarDays, Send, MessageSquare,
-  ExternalLink, LogOut, KeyRound, Moon, Sun, Laptop2, Building2,
+  ExternalLink, LogOut, KeyRound, Moon, Sun, Laptop2, Building2, Menu,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import DailyRateio from "./DailyRateio";
@@ -335,24 +335,40 @@ const COLLAB_NAV: { id: View; label: string; icon: React.ReactNode }[] = [
   { id: "homeoffice", label: "Home Office", icon: <Laptop2 size={16} /> },
 ];
 
-function Sidebar({ active, onNav, role, displayName, displaySubtitle, onLogout, onChangePassword, nightMode, onToggleNightMode }: SidebarProps) {
-  const nav = role === "admin" ? ADMIN_NAV : COLLAB_NAV;
+// Conteúdo do menu (itens de navegação + usuário logado) — usado tanto no
+// menu fixo do desktop quanto dentro da gaveta do mobile. `onNavigate` já
+// vem embrulhado por quem chama pra fechar a gaveta depois de navegar.
+function SidebarNavContent({
+  nav,
+  active,
+  onNavigate,
+  role,
+  displayName,
+  displaySubtitle,
+  onLogout,
+  onChangePassword,
+  nightMode,
+  onToggleNightMode,
+}: {
+  nav: { id: View; label: string; icon: React.ReactNode }[];
+  active: View;
+  onNavigate: (v: View) => void;
+  role: UserRole;
+  displayName: string;
+  displaySubtitle: string;
+  onLogout: () => void;
+  onChangePassword: () => void;
+  nightMode: boolean;
+  onToggleNightMode: () => void;
+}) {
   return (
-    <aside className="w-56 shrink-0 h-screen flex flex-col border-r border-border bg-card">
-      <div className="h-14 flex items-center px-5 border-b border-border">
-        <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 bg-[#18181b] rounded-md flex items-center justify-center">
-            <Zap size={12} className="text-white" />
-          </div>
-          <span className="text-sm font-semibold tracking-tight">Rateio TI</span>
-        </div>
-      </div>
-      <nav className="flex-1 py-3 px-2 space-y-0.5">
+    <>
+      <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
         {nav.map((item) => (
           <button
             key={item.id}
-            onClick={() => onNav(item.id)}
-            className={`w-full flex items-center gap-2.5 px-3 h-8 rounded-lg text-sm transition-all text-left ${
+            onClick={() => onNavigate(item.id)}
+            className={`w-full flex items-center gap-2.5 px-3 h-9 md:h-8 rounded-lg text-sm transition-all text-left ${
               active === item.id
                 ? "bg-muted text-foreground font-medium"
                 : "text-muted-foreground hover:text-foreground hover:bg-background"
@@ -364,7 +380,7 @@ function Sidebar({ active, onNav, role, displayName, displaySubtitle, onLogout, 
         ))}
       </nav>
       {/* Usuário logado */}
-      <div className="px-3 py-3 border-t border-border">
+      <div className="px-3 py-3 border-t border-border shrink-0">
         <div className="flex items-center gap-2.5 px-1 mb-2">
           <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0">
             {role === "admin" ? <Shield size={12} className="text-muted-foreground" /> : <User size={12} className="text-muted-foreground" />}
@@ -374,7 +390,7 @@ function Sidebar({ active, onNav, role, displayName, displaySubtitle, onLogout, 
             <p className="text-[10px] text-[var(--tone-subtle)] truncate">{displaySubtitle}</p>
           </div>
         </div>
-        <div className="w-full flex items-center gap-2 px-3 h-8 rounded-lg text-xs text-muted-foreground">
+        <div className="w-full flex items-center gap-2 px-3 h-9 md:h-8 rounded-lg text-xs text-muted-foreground">
           <span className="flex items-center gap-2 flex-1">
             {nightMode ? <Moon size={13} /> : <Sun size={13} />}
             Modo noturno
@@ -383,18 +399,85 @@ function Sidebar({ active, onNav, role, displayName, displaySubtitle, onLogout, 
         </div>
         <button
           onClick={onChangePassword}
-          className="w-full flex items-center gap-2 px-3 h-7 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-background transition-all"
+          className="w-full flex items-center gap-2 px-3 h-9 md:h-7 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-background transition-all"
         >
           <KeyRound size={13} />Alterar senha
         </button>
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-2 px-3 h-7 rounded-lg text-xs text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/15 transition-all"
+          className="w-full flex items-center gap-2 px-3 h-9 md:h-7 rounded-lg text-xs text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/15 transition-all"
         >
           <LogOut size={13} />Sair
         </button>
       </div>
-    </aside>
+    </>
+  );
+}
+
+function SidebarBrand() {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="w-6 h-6 bg-[#18181b] rounded-md flex items-center justify-center shrink-0">
+        <Zap size={12} className="text-white" />
+      </div>
+      <span className="text-sm font-semibold tracking-tight">Rateio TI</span>
+    </div>
+  );
+}
+
+function Sidebar({ active, onNav, role, displayName, displaySubtitle, onLogout, onChangePassword, nightMode, onToggleNightMode }: SidebarProps) {
+  const nav = role === "admin" ? ADMIN_NAV : COLLAB_NAV;
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const contentProps = { nav, active, role, displayName, displaySubtitle, nightMode, onToggleNightMode };
+
+  return (
+    <>
+      {/* Barra superior — só no mobile (a partir de md vira o menu fixo lateral) */}
+      <header className="md:hidden h-14 shrink-0 flex items-center justify-between px-4 border-b border-border bg-card">
+        <SidebarBrand />
+        <button
+          onClick={() => setMobileOpen(true)}
+          aria-label="Abrir menu"
+          className="w-9 h-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-background transition-all"
+        >
+          <Menu size={20} />
+        </button>
+      </header>
+
+      {/* Gaveta do menu — só no mobile, sobrepõe a tela quando aberta */}
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
+          <aside className="relative w-72 max-w-[80vw] h-full bg-card border-r border-border flex flex-col">
+            <div className="h-14 shrink-0 flex items-center justify-between px-4 border-b border-border">
+              <SidebarBrand />
+              <button
+                onClick={() => setMobileOpen(false)}
+                aria-label="Fechar menu"
+                className="w-9 h-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-background transition-all"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <SidebarNavContent
+              {...contentProps}
+              onNavigate={(v) => { onNav(v); setMobileOpen(false); }}
+              onLogout={onLogout}
+              onChangePassword={() => { onChangePassword(); setMobileOpen(false); }}
+            />
+          </aside>
+        </div>
+      )}
+
+      {/* Menu fixo — só a partir de md (desktop/tablet) */}
+      <aside className="hidden md:flex md:w-56 md:shrink-0 h-screen flex-col border-r border-border bg-card">
+        <div className="h-14 flex items-center px-5 border-b border-border shrink-0">
+          <SidebarBrand />
+        </div>
+        <SidebarNavContent {...contentProps} onNavigate={onNav} onLogout={onLogout} onChangePassword={onChangePassword} />
+      </aside>
+    </>
   );
 }
 
@@ -2965,7 +3048,7 @@ function MainApp({ user, onLogout, nightMode, onToggleNightMode }: { user: AuthU
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background" style={{ fontFamily: "var(--font-family)" }}>
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-background" style={{ fontFamily: "var(--font-family)" }}>
       <Sidebar
         active={view}
         onNav={handleNav}
