@@ -6,20 +6,21 @@ import {
   ChevronDown, CheckCircle2, AlertCircle, Clock, FileSpreadsheet, Printer,
   Trash2, Pencil, X, Check, Zap, Lock, Unlock, Shield,
   User, ChevronRight, CalendarDays, Send, MessageSquare,
-  ExternalLink, LogOut, KeyRound, Moon, Sun,
+  ExternalLink, LogOut, KeyRound, Moon, Sun, Laptop2, Building2,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import DailyRateio from "./DailyRateio";
+import HomeOffice from "./HomeOffice";
 import { Switch } from "./components/ui/switch";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type Unit = "wolf" | "fraga" | "woncred" | "profit";
-type View = "dashboard" | "rateio" | "diario" | "projetos" | "colaboradores" | "acessos" | "relatorios" | "configuracoes";
+type View = "dashboard" | "rateio" | "diario" | "homeoffice" | "projetos" | "colaboradores" | "setores" | "acessos" | "relatorios" | "configuracoes";
 type UserRole = "admin" | "collaborator";
 type RateioStatus = "open" | "approved";
 
-interface Collaborator {
+export interface Collaborator {
   id: string;
   name: string;
   role: string;
@@ -27,6 +28,19 @@ interface Collaborator {
   // Opcional — "YYYY-MM-DD". Usado só pra saber o mês do aniversário (o dia
   // off do mês do aniversário é descontado automaticamente do Rateio Mensal).
   birthDate?: string;
+  // Campos da Escala de Home Office (ver HomeOffice.tsx):
+  sectorId?: string;
+  color?: string; // "#RRGGBB" — cor da tag desse colaborador na escala
+  hireDate?: string; // "YYYY-MM-DD" — define a cota semanal automática de HO
+  active: boolean; // conta pro mínimo presencial do setor quando true
+}
+
+// Setor/área — cadastro simples (nome), membros são os colaboradores cujo
+// sectorId aponta pra ele (editado no cadastro do colaborador, não aqui).
+export interface Sector {
+  id: string;
+  name: string;
+  memberIds: string[];
 }
 
 interface UnitProject {
@@ -249,7 +263,7 @@ const computeProjectDays = (
   return result;
 };
 
-const fmtDate = (iso: string) => {
+export const fmtDate = (iso: string) => {
   if (!iso) return "—";
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;
@@ -276,7 +290,7 @@ function ProgressBar({ total, workingDays }: { total: number; workingDays: numbe
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 
-function Avatar({ name, size = 7 }: { name: string; size?: number }) {
+export function Avatar({ name, size = 7 }: { name: string; size?: number }) {
   return (
     <div
       className={`rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground shrink-0`}
@@ -305,8 +319,10 @@ const ADMIN_NAV: { id: View; label: string; icon: React.ReactNode }[] = [
   { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={16} /> },
   { id: "rateio", label: "Rateio Mensal", icon: <FileBarChart2 size={16} /> },
   { id: "diario", label: "Meu Rateio Diário", icon: <CalendarDays size={16} /> },
+  { id: "homeoffice", label: "Home Office", icon: <Laptop2 size={16} /> },
   { id: "projetos", label: "Projetos", icon: <FileSpreadsheet size={16} /> },
   { id: "colaboradores", label: "Colaboradores", icon: <Users size={16} /> },
+  { id: "setores", label: "Setores", icon: <Building2 size={16} /> },
   { id: "acessos", label: "Acessos", icon: <KeyRound size={16} /> },
   { id: "configuracoes", label: "Configurações", icon: <Settings size={16} /> },
 ];
@@ -315,6 +331,7 @@ const COLLAB_NAV: { id: View; label: string; icon: React.ReactNode }[] = [
   { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={16} /> },
   { id: "rateio", label: "Meu Rateio", icon: <FileBarChart2 size={16} /> },
   { id: "diario", label: "Meu Rateio Diário", icon: <CalendarDays size={16} /> },
+  { id: "homeoffice", label: "Home Office", icon: <Laptop2 size={16} /> },
 ];
 
 function Sidebar({ active, onNav, role, displayName, displaySubtitle, onLogout, onChangePassword, nightMode, onToggleNightMode }: SidebarProps) {
@@ -385,18 +402,29 @@ function Sidebar({ active, onNav, role, displayName, displaySubtitle, onLogout, 
 interface CollaboratorFormProps {
   initial?: Partial<Collaborator>;
   workingDays: number;
+  sectors: Sector[];
   onSave: (c: Omit<Collaborator, "id">) => void;
   onCancel: () => void;
 }
 
-function CollaboratorForm({ initial, workingDays, onSave, onCancel }: CollaboratorFormProps) {
+// Cor padrão sugerida pra colaboradores novos (só um ponto de partida no
+// color picker — cada um normalmente troca pra ficar igual à cor usada na
+// planilha antiga de Home Office).
+const DEFAULT_COLLABORATOR_COLOR = "#3b82f6";
+
+function CollaboratorForm({ initial, workingDays, sectors, onSave, onCancel }: CollaboratorFormProps) {
   const [name, setName] = useState(initial?.name ?? "");
   const [role, setRole] = useState(initial?.role ?? "");
   const [salary, setSalary] = useState(initial?.salary?.toString() ?? "");
   const [birthDate, setBirthDate] = useState(initial?.birthDate ?? "");
+  const [sectorId, setSectorId] = useState(initial?.sectorId ?? "");
+  const [color, setColor] = useState(initial?.color ?? DEFAULT_COLLABORATOR_COLOR);
+  const [hireDate, setHireDate] = useState(initial?.hireDate ?? "");
+  const [active, setActive] = useState(initial?.active ?? true);
   const salaryNum = parseFloat(salary.replace(",", ".")) || 0;
   const daily = workingDays > 0 ? salaryNum / workingDays : 0;
-  const valid = name.trim() && role.trim() && salaryNum > 0;
+  const validColor = /^#[0-9a-fA-F]{6}$/.test(color);
+  const valid = name.trim() && role.trim() && salaryNum > 0 && validColor;
   return (
     <div className="bg-card border border-border rounded-xl p-5 space-y-4">
       <div className="grid grid-cols-2 gap-3">
@@ -426,13 +454,41 @@ function CollaboratorForm({ initial, workingDays, onSave, onCancel }: Collaborat
           <input type="date" className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} style={{ fontFamily: "var(--font-mono)" }} />
           <p className="text-[10px] text-[var(--tone-subtle)] mt-1">No mês do aniversário, 1 dia é descontado automaticamente do Rateio Mensal (day off).</p>
         </div>
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1.5">Setor (Home Office)</label>
+          <select className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" value={sectorId} onChange={(e) => setSectorId(e.target.value)}>
+            <option value="">Sem setor</option>
+            {sectors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1.5">Admissão (define a cota de Home Office)</label>
+          <input type="date" className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" value={hireDate} onChange={(e) => setHireDate(e.target.value)} style={{ fontFamily: "var(--font-mono)" }} />
+          <p className="text-[10px] text-[var(--tone-subtle)] mt-1">Menos de 1 mês: 0 dias/semana · 1 a 2 meses: 1 dia/semana · 2+ meses: 2 dias/semana.</p>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1.5">Cor na Escala de Home Office</label>
+          <div className="flex items-center gap-2">
+            <input type="color" value={validColor ? color : DEFAULT_COLLABORATOR_COLOR} onChange={(e) => setColor(e.target.value)} className="w-8 h-8 rounded-lg border border-border cursor-pointer bg-background p-0.5" />
+            <input className="flex-1 h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" placeholder="#3b82f6" value={color} onChange={(e) => setColor(e.target.value)} style={{ fontFamily: "var(--font-mono)" }} />
+          </div>
+          {!validColor && <p className="text-[10px] text-red-500 mt-1">Use o formato #RRGGBB</p>}
+        </div>
+        <div className="flex items-center justify-between px-1">
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground">Colaborador ativo</label>
+            <p className="text-[10px] text-[var(--tone-subtle)] mt-0.5">Inativos não contam no mínimo presencial do setor</p>
+          </div>
+          <Switch checked={active} onCheckedChange={setActive} />
+        </div>
       </div>
       <div className="flex items-center justify-end gap-2 pt-1">
         <button onClick={onCancel} className="h-8 px-4 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-input-background transition-all">Cancelar</button>
-        {/* birthDate vai como "" (não undefined) quando limpo, pra garantir que o
-            JSON enviado ao servidor tenha a chave e ele saiba que é pra apagar
-            a data — undefined simplesmente some do corpo da requisição. */}
-        <button onClick={() => valid && onSave({ name: name.trim(), role: role.trim(), salary: salaryNum, birthDate })} disabled={!valid} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">Salvar</button>
+        {/* birthDate/hireDate/sectorId vão como "" (não undefined) quando
+            limpos, pra garantir que o JSON enviado ao servidor tenha a chave
+            e ele saiba que é pra apagar o valor — undefined simplesmente
+            some do corpo da requisição (JSON.stringify descarta a chave). */}
+        <button onClick={() => valid && onSave({ name: name.trim(), role: role.trim(), salary: salaryNum, birthDate, sectorId: sectorId || "", color, hireDate, active })} disabled={!valid} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">Salvar</button>
       </div>
     </div>
   );
@@ -891,7 +947,7 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
                     <>
                       <tr
                         key={c.id}
-                        className={`border-b border-[var(--border-4)] transition-colors cursor-pointer group ${total === target ? "bg-emerald-50 dark:bg-emerald-500/15/20" : total > target ? "bg-red-50 dark:bg-red-500/15/30" : ""}`}
+                        className={`border-b border-[var(--border-4)] transition-colors cursor-pointer group ${total === target ? "bg-emerald-50/20 dark:bg-emerald-500/15" : total > target ? "bg-red-50/30 dark:bg-red-500/15" : ""}`}
                         onClick={() => setExpandedId(isExpanded ? null : c.id)}
                       >
                         <td className="px-5 py-3">
@@ -2107,12 +2163,14 @@ interface ColaboradoresViewProps {
   collaborators: Collaborator[];
   setCollaborators: React.Dispatch<React.SetStateAction<Collaborator[]>>;
   workingDays: number;
+  sectors: Sector[];
 }
 
-function ColaboradoresView({ collaborators, setCollaborators, workingDays }: ColaboradoresViewProps) {
+function ColaboradoresView({ collaborators, setCollaborators, workingDays, sectors }: ColaboradoresViewProps) {
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const totalFolha = collaborators.reduce((s, c) => s + c.salary, 0);
+  const sectorName = (id?: string) => sectors.find((s) => s.id === id)?.name ?? "—";
 
   return (
     <div className="flex-1 overflow-auto">
@@ -2124,7 +2182,7 @@ function ColaboradoresView({ collaborators, setCollaborators, workingDays }: Col
           </div>
           <button onClick={() => setAdding(true)} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all flex items-center gap-1.5"><Plus size={14} />Novo Colaborador</button>
         </div>
-        {adding && <CollaboratorForm workingDays={workingDays} onSave={(d) => {
+        {adding && <CollaboratorForm workingDays={workingDays} sectors={sectors} onSave={(d) => {
           const tempId = String(Date.now());
           setCollaborators((p) => [...p, { ...d, id: tempId }]);
           setAdding(false);
@@ -2139,6 +2197,7 @@ function ColaboradoresView({ collaborators, setCollaborators, workingDays }: Col
               <tr className="border-b border-border">
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Nome</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Cargo</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Setor</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Aniversário</th>
                 <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground">Salário</th>
                 <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground">Valor/Dia</th>
@@ -2148,9 +2207,17 @@ function ColaboradoresView({ collaborators, setCollaborators, workingDays }: Col
             <tbody>
               {collaborators.map((c) => (
                 <>
-                  <tr key={c.id} className="border-b border-[var(--border-4)] last:border-0 group">
-                    <td className="px-5 py-3"><div className="flex items-center gap-2.5"><Avatar name={c.name} /><span className="text-sm font-medium">{c.name}</span></div></td>
+                  <tr key={c.id} className={`border-b border-[var(--border-4)] last:border-0 group ${c.active ? "" : "opacity-50"}`}>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.color || "var(--tone-line)" }} title="Cor na Escala de Home Office" />
+                        <Avatar name={c.name} />
+                        <span className="text-sm font-medium">{c.name}</span>
+                        {!c.active && <span className="text-[9px] font-medium uppercase tracking-wider text-[var(--tone-subtle)] border border-border rounded px-1 py-0.5">Inativo</span>}
+                      </div>
+                    </td>
                     <td className="px-5 py-3 text-sm text-muted-foreground">{c.role}</td>
+                    <td className="px-5 py-3 text-sm text-muted-foreground">{sectorName(c.sectorId)}</td>
                     <td className="px-5 py-3 text-xs text-muted-foreground" style={{ fontFamily: "var(--font-mono)" }}>{c.birthDate ? fmtDate(c.birthDate) : "—"}</td>
                     <td className="px-5 py-3 text-right text-sm tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmt(c.salary)}</td>
                     <td className="px-5 py-3 text-right text-xs tabular-nums text-[var(--tone-subtle)]" style={{ fontFamily: "var(--font-mono)" }}>{fmt(dailyRate(c.salary, workingDays))}</td>
@@ -2167,8 +2234,8 @@ function ColaboradoresView({ collaborators, setCollaborators, workingDays }: Col
                   </tr>
                   {editId === c.id && (
                     <tr key={`edit-${c.id}`}>
-                      <td colSpan={6} className="px-5 pb-3">
-                        <CollaboratorForm initial={c} workingDays={workingDays} onSave={(d) => {
+                      <td colSpan={7} className="px-5 pb-3">
+                        <CollaboratorForm initial={c} workingDays={workingDays} sectors={sectors} onSave={(d) => {
                           setCollaborators((p) => p.map((x) => x.id === c.id ? { ...x, ...d } : x));
                           setEditId(null);
                           apiPut(`/collaborators/${c.id}`, d).catch(() => { alert("Não foi possível salvar as alterações. Atualize a página."); });
@@ -2180,6 +2247,115 @@ function ColaboradoresView({ collaborators, setCollaborators, workingDays }: Col
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Setores View ─────────────────────────────────────────────────────────────
+// Cadastro simples de setores/áreas — só o nome. O vínculo de membros é
+// editado no cadastro do colaborador (campo "Setor"); aqui é só leitura,
+// pra ver de relance quem está em cada setor.
+
+interface SetoresViewProps {
+  sectors: Sector[];
+  setSectors: React.Dispatch<React.SetStateAction<Sector[]>>;
+  collaborators: Collaborator[];
+}
+
+function SetoresView({ sectors, setSectors, collaborators }: SetoresViewProps) {
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+
+  const membersOf = (sector: Sector) =>
+    collaborators.filter((c) => sector.memberIds.includes(c.id));
+
+  const createSector = () => {
+    const name = newName.trim();
+    if (!name) return;
+    setNewName("");
+    setAdding(false);
+    apiPost("/sectors", { name })
+      .then((s) => setSectors((p) => [...p, s].sort((a, b) => a.name.localeCompare(b.name))))
+      .catch((e) => alert(e.message));
+  };
+
+  const renameSector = (id: string) => {
+    const name = editName.trim();
+    if (!name) return;
+    setEditId(null);
+    apiPut(`/sectors/${id}`, { name })
+      .then((s) => setSectors((p) => p.map((x) => (x.id === id ? s : x))))
+      .catch((e) => alert(e.message));
+  };
+
+  const removeSector = (sector: Sector) => {
+    if (!confirm(`Remover o setor "${sector.name}"? Os colaboradores vinculados ficam sem setor, mas não são apagados.`)) return;
+    setSectors((p) => p.filter((x) => x.id !== sector.id));
+    apiDelete(`/sectors/${sector.id}`).catch(() => { alert("Não foi possível remover. Atualize a página."); });
+  };
+
+  return (
+    <div className="flex-1 overflow-auto">
+      <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Setores</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">{sectors.length} setores cadastrados</p>
+          </div>
+          <button onClick={() => setAdding(true)} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all flex items-center gap-1.5"><Plus size={14} />Novo Setor</button>
+        </div>
+        {adding && (
+          <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-2">
+            <input className="flex-1 h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" placeholder="Nome do setor" value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createSector()} autoFocus />
+            <button onClick={() => setAdding(false)} className="h-8 px-3 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-input-background transition-all">Cancelar</button>
+            <button onClick={createSector} disabled={!newName.trim()} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">Salvar</button>
+          </div>
+        )}
+        <div className="space-y-3">
+          {sectors.map((s) => {
+            const members = membersOf(s);
+            return (
+              <div key={s.id} className="bg-card border border-border rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  {editId === s.id ? (
+                    <div className="flex items-center gap-2 flex-1">
+                      <input className="flex-1 h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" value={editName} onChange={(e) => setEditName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && renameSector(s.id)} autoFocus />
+                      <button onClick={() => setEditId(null)} className="h-8 px-3 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-input-background transition-all">Cancelar</button>
+                      <button onClick={() => renameSector(s.id)} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all">Salvar</button>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <p className="text-sm font-semibold">{s.name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{members.length} {members.length === 1 ? "membro" : "membros"}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => { setEditId(s.id); setEditName(s.name); }} className="w-6 h-6 rounded-md flex items-center justify-center text-[var(--tone-subtle)] hover:text-foreground hover:bg-input-background transition-all"><Pencil size={12} /></button>
+                        <button onClick={() => removeSector(s)} className="w-6 h-6 rounded-md flex items-center justify-center text-[var(--tone-subtle)] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/15 transition-all"><Trash2 size={12} /></button>
+                      </div>
+                    </>
+                  )}
+                </div>
+                {members.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {members.map((m) => (
+                      <span key={m.id} className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-muted">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: m.color || "var(--tone-line)" }} />
+                        {m.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {sectors.length === 0 && !adding && (
+            <p className="text-sm text-muted-foreground text-center py-8">Nenhum setor cadastrado ainda.</p>
+          )}
         </div>
       </div>
     </div>
@@ -2232,7 +2408,7 @@ function DashboardView({ collaborators, releases, projects, workingDays, role, c
           {openReleases.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Pendente</p>
-              <button onClick={() => onNav("rateio")} className="w-full bg-blue-50 dark:bg-blue-500/15 border border-blue-100 dark:border-blue-500/20 rounded-xl px-5 py-4 text-left hover:bg-blue-100 dark:hover:bg-blue-500/25/60 transition-all flex items-center justify-between">
+              <button onClick={() => onNav("rateio")} className="w-full bg-blue-50 dark:bg-blue-500/15 border border-blue-100 dark:border-blue-500/20 rounded-xl px-5 py-4 text-left hover:bg-blue-100/60 dark:hover:bg-blue-500/25 transition-all flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold text-blue-800">{openReleases.map((r) => `${MONTHS[r.month]} ${r.year}`).join(", ")}</p>
                   <p className="text-xs text-blue-600 mt-0.5">Clique para preencher seu rateio</p>
@@ -2734,6 +2910,7 @@ function MainApp({ user, onLogout, nightMode, onToggleNightMode }: { user: AuthU
 
   const [workingDays, setWorkingDaysRaw] = useState(22);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  const [sectors, setSectors] = useState<Sector[]>([]);
   const [releases, setReleases] = useState<RateioRelease[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -2746,13 +2923,15 @@ function MainApp({ user, onLogout, nightMode, onToggleNightMode }: { user: AuthU
       apiGet("/collaborators"),
       apiGet("/releases"),
       apiGet("/settings"),
+      apiGet("/sectors"),
       role === "admin" ? apiGet("/projects") : Promise.resolve([]),
     ])
-      .then(([cs, rs, settings, ps]) => {
+      .then(([cs, rs, settings, secs, ps]) => {
         if (cancelled) return;
         setCollaborators(cs);
         setReleases(rs);
         setWorkingDaysRaw(settings?.workingDays ?? 22);
+        setSectors(secs);
         setProjects(ps);
         setLoadingData(false);
       })
@@ -2841,6 +3020,15 @@ function MainApp({ user, onLogout, nightMode, onToggleNightMode }: { user: AuthU
         />
       )}
 
+      {view === "homeoffice" && (
+        <HomeOffice
+          collaborators={collaborators}
+          sectors={sectors}
+          role={role}
+          currentCollaboratorId={currentCollaboratorId}
+        />
+      )}
+
       {view === "projetos" && role === "admin" && (
         <ProjectsView
           projects={projects}
@@ -2857,7 +3045,12 @@ function MainApp({ user, onLogout, nightMode, onToggleNightMode }: { user: AuthU
           collaborators={collaborators}
           setCollaborators={setCollaborators}
           workingDays={workingDays}
+          sectors={sectors}
         />
+      )}
+
+      {view === "setores" && role === "admin" && (
+        <SetoresView sectors={sectors} setSectors={setSectors} collaborators={collaborators} />
       )}
 
       {view === "acessos" && role === "admin" && (

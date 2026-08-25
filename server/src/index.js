@@ -17,6 +17,8 @@ const projectsRoutes = require("./routes/projects");
 const releasesRoutes = require("./routes/releases");
 const settingsRoutes = require("./routes/settings");
 const dailyRoutes = require("./routes/daily");
+const sectorsRoutes = require("./routes/sectors");
+const homeOfficeRoutes = require("./routes/homeOffice");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -35,6 +37,8 @@ app.use("/api/projects", projectsRoutes);
 app.use("/api/releases", releasesRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/daily", dailyRoutes);
+app.use("/api/sectors", sectorsRoutes);
+app.use("/api/home-office", homeOfficeRoutes);
 
 // Serve the built frontend (Vite build output) if present.
 const publicDir = path.join(__dirname, "..", "public");

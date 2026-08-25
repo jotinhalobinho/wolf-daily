@@ -1,12 +1,25 @@
 SET FOREIGN_KEY_CHECKS = 0;
 
+CREATE TABLE IF NOT EXISTS sectors (
+  id         VARCHAR(64) PRIMARY KEY,
+  name       VARCHAR(255) NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_sector_name UNIQUE (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS collaborators (
   id         VARCHAR(64) PRIMARY KEY,
   name       VARCHAR(255) NOT NULL,
   role       VARCHAR(100) NOT NULL,
+  sector_id  VARCHAR(64) NULL,
+  color      VARCHAR(7) NULL,
+  hire_date  DATE NULL,
+  active     TINYINT(1) NOT NULL DEFAULT 1,
   birth_date DATE NULL,
   salary     DECIMAL(12,2) NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_collaborators_sector
+    FOREIGN KEY (sector_id) REFERENCES sectors(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS users (
@@ -121,6 +134,53 @@ CREATE TABLE IF NOT EXISTS daily_day_items (
   operations   VARCHAR(255) NULL,
   CONSTRAINT fk_day_items_day
     FOREIGN KEY (day_id) REFERENCES daily_days(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS ho_periods (
+  id          VARCHAR(64) PRIMARY KEY,
+  month       INT NOT NULL,
+  year        INT NOT NULL,
+  deadline    VARCHAR(50) DEFAULT '',
+  status      ENUM('open','approved') NOT NULL DEFAULT 'open',
+  approved_at DATETIME NULL,
+  created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_ho_period_month_year UNIQUE (month, year)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS ho_entries (
+  id              INT AUTO_INCREMENT PRIMARY KEY,
+  period_id       VARCHAR(64) NOT NULL,
+  collaborator_id VARCHAR(64) NOT NULL,
+  date            DATE NOT NULL,
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_ho_entry UNIQUE (period_id, collaborator_id, date),
+  CONSTRAINT fk_ho_entries_period
+    FOREIGN KEY (period_id) REFERENCES ho_periods(id) ON DELETE CASCADE,
+  CONSTRAINT fk_ho_entries_collaborator
+    FOREIGN KEY (collaborator_id) REFERENCES collaborators(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS ho_special_days (
+  id              INT AUTO_INCREMENT PRIMARY KEY,
+  period_id       VARCHAR(64) NOT NULL,
+  collaborator_id VARCHAR(64) NOT NULL,
+  date            DATE NOT NULL,
+  type            ENUM('ferias','dayoff') NOT NULL,
+  CONSTRAINT uq_ho_special_day UNIQUE (period_id, collaborator_id, date),
+  CONSTRAINT fk_ho_special_period
+    FOREIGN KEY (period_id) REFERENCES ho_periods(id) ON DELETE CASCADE,
+  CONSTRAINT fk_ho_special_collaborator
+    FOREIGN KEY (collaborator_id) REFERENCES collaborators(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS ho_general_meetings (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  period_id  VARCHAR(64) NOT NULL,
+  date       DATE NOT NULL,
+  title      VARCHAR(255) DEFAULT '',
+  CONSTRAINT uq_ho_meeting_date UNIQUE (period_id, date),
+  CONSTRAINT fk_ho_meeting_period
+    FOREIGN KEY (period_id) REFERENCES ho_periods(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 1;
