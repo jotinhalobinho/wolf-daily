@@ -115,53 +115,57 @@ function parseWeekKey(key: string): { year: number; week: number } | null {
   return { year: Number(m[1]), week: Number(m[2]) };
 }
 
-function hasThreeConsecutiveWeeks(weekKeys: string[]): boolean {
-  const parsed = [...new Set(weekKeys)]
-    .map(parseWeekKey)
-    .filter((w): w is { year: number; week: number } => !!w)
-    .sort((a, b) => a.year - b.year || a.week - b.week);
-  let streak = 1;
-  for (let i = 1; i < parsed.length; i++) {
-    const prev = parsed[i - 1];
-    const cur = parsed[i];
-    const consecutive = cur.year === prev.year ? cur.week === prev.week + 1 : cur.week === 1;
-    streak = consecutive ? streak + 1 : 1;
-    if (streak >= 3) return true;
-  }
-  return false;
-}
-
 // Avisos leves (nunca bloqueiam) sobre os dias de HO já marcados por alguém —
-// cada string aqui vira o texto do tooltip do ícone de aviso.
-function computeWarnings(businessDays: string[], dates: string[]): string[] {
-  if (dates.length < 2) return [];
-  const warnings: string[] = [];
+// cada string vira o texto do tooltip do ícone de aviso. Retorna só as datas
+// realmente envolvidas no padrão (o par de dias consecutivos, ou as semanas
+// da sequência repetida) — não o mês inteiro do colaborador, senão o ícone
+// aparece em todo dia marcado mesmo quando só um par específico é o problema.
+function computeWarningsByDate(businessDays: string[], dates: string[]): Map<string, string[]> {
+  const result = new Map<string, string[]>();
+  if (dates.length < 2) return result;
+  const addWarning = (date: string, msg: string) => {
+    const list = result.get(date) ?? [];
+    if (!list.includes(msg)) list.push(msg);
+    result.set(date, list);
+  };
   const sorted = [...dates].sort();
 
+  const consecutiveMsg = "Dias consecutivos de home office marcados na mesma semana";
   const dayIndex = new Map(businessDays.map((d, i) => [d, i]));
   for (let i = 0; i < sorted.length - 1; i++) {
     const idx = dayIndex.get(sorted[i]);
     const nextIdx = dayIndex.get(sorted[i + 1]);
     if (idx != null && nextIdx != null && nextIdx === idx + 1) {
-      warnings.push("Dias consecutivos de home office marcados na mesma semana");
-      break;
+      addWarning(sorted[i], consecutiveMsg);
+      addWarning(sorted[i + 1], consecutiveMsg);
     }
   }
 
+  const repeatMsg = "Sempre escolhe o mesmo dia da semana, em 3 ou mais semanas seguidas";
   const byWeekday = new Map<number, string[]>();
   for (const d of sorted) {
     const [y, m, day] = d.split("-").map(Number);
     const weekday = new Date(y, m - 1, day).getDay();
     if (!byWeekday.has(weekday)) byWeekday.set(weekday, []);
-    byWeekday.get(weekday)!.push(isoWeekKey(d));
+    byWeekday.get(weekday)!.push(d);
   }
-  for (const weekKeys of byWeekday.values()) {
-    if (hasThreeConsecutiveWeeks(weekKeys)) {
-      warnings.push("Sempre escolhe o mesmo dia da semana, em 3 ou mais semanas seguidas");
-      break;
+  for (const datesForWeekday of byWeekday.values()) {
+    const parsed = datesForWeekday.map((d) => ({ date: d, week: parseWeekKey(isoWeekKey(d)) }));
+    let runStart = 0;
+    for (let i = 1; i <= parsed.length; i++) {
+      const prev = parsed[i - 1].week;
+      const cur = i < parsed.length ? parsed[i].week : null;
+      const consecutive = !!(cur && prev && (cur.year === prev.year ? cur.week === prev.week + 1 : cur.week === 1));
+      if (!consecutive) {
+        if (i - runStart >= 3) {
+          for (let j = runStart; j < i; j++) addWarning(parsed[j].date, repeatMsg);
+        }
+        runStart = i;
+      }
     }
   }
-  return warnings;
+
+  return result;
 }
 
 // ─── Pílula de um colaborador dentro do dia ────────────────────────────────────
@@ -193,7 +197,9 @@ function HOPill({ collaborator, kind, color, isSelf, canRemove, pending, warning
       {kind === "ho" && <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color || "var(--tone-subtle)" }} />}
       <span className="flex-1 truncate font-medium">{style.label}</span>
       {warnings.length > 0 && (
-        <AlertCircle size={11} className="text-amber-500 shrink-0" title={warnings.join(" · ")} />
+        <span title={warnings.join(" · ")} className="shrink-0 inline-flex">
+          <AlertCircle size={11} className="text-amber-500" />
+        </span>
       )}
       {isSelf && canRemove && (
         <button onClick={onRemove} disabled={pending} title="Desmarcar meu home office" className="shrink-0 opacity-70 hover:opacity-100 hover:text-red-500 transition-opacity">
@@ -260,8 +266,8 @@ function HODayColumn({
         ) : (
           <>
             {sectorFullWarning && (
-              <div className="flex items-center gap-1 text-[10px] text-red-500 font-medium mb-1">
-                <Info size={11} className="shrink-0" title={sectorFullWarning} />
+              <div className="flex items-center gap-1 text-[10px] text-red-500 font-medium mb-1" title={sectorFullWarning}>
+                <Info size={11} className="shrink-0" />
                 <span className="truncate">Sem vagas</span>
               </div>
             )}
@@ -274,7 +280,7 @@ function HODayColumn({
                 isSelf={c.id === currentCollaboratorId}
                 canRemove={canSelfToggle}
                 pending={pendingSelf && c.id === currentCollaboratorId}
-                warnings={warningsByCollaboratorId.get(c.id) ?? []}
+                warnings={warningsByCollaboratorId.get(`${c.id}|${date}`) ?? []}
                 onRemove={onToggleSelf}
               />
             ))}
@@ -636,13 +642,17 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
     return map;
   }, [roster, entriesByCollaborator]);
 
+  // Chave "collaboratorId|data" -> avisos daquele dia específico (não do mês
+  // inteiro do colaborador — só a data que de fato tem o padrão problemático).
   const warningsByCollaboratorId = useMemo(() => {
     const map = new Map<string, string[]>();
     if (!period) return map;
     for (const c of roster) {
       const dates = [...(entriesByCollaborator.get(c.id) ?? [])];
-      const w = computeWarnings(period.businessDays, dates);
-      if (w.length) map.set(c.id, w);
+      const byDate = computeWarningsByDate(period.businessDays, dates);
+      for (const [date, warnings] of byDate) {
+        map.set(`${c.id}|${date}`, warnings);
+      }
     }
     return map;
   }, [roster, entriesByCollaborator, period]);
