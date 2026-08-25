@@ -41,14 +41,42 @@
   --sidebar-accent-foreground: #18181b;
   --sidebar-border: rgba(0, 0, 0, 0.06);
   --sidebar-ring: rgba(0, 0, 0, 0.12);
+
+  /* tons neutros extras usados nas telas (fora da paleta shadcn padrão) */
+  --tone-subtle: #a1a1aa;
+  --tone-faint: #c0c0c8;
+  --tone-dim: #52525b;
+  --tone-line: #d1d1d6;
+  --tone-card-alt: #fafafa;
+  --tone-track-empty: #e4e4e7;
+
+  /* bordas em opacidades intermediárias */
+  --border-4: rgba(0, 0, 0, 0.04);
+  --border-5: rgba(0, 0, 0, 0.05);
+  --border-8: rgba(0, 0, 0, 0.08);
+  --border-10: rgba(0, 0, 0, 0.1);
+  --border-12: rgba(0, 0, 0, 0.12);
+  --border-14: rgba(0, 0, 0, 0.14);
+  --border-20: rgba(0, 0, 0, 0.2);
+
+  /* fundos claros dos centros de custo (badges/cards) */
+  --unit-wolf-bg: #eff6ff;
+  --unit-fraga-bg: #f5f3ff;
+  --unit-woncred-bg: #ecfdf5;
+
+  /* âmbar (atestado / Profit) e rosa (day off) */
+  --accent-amber-bg: #fffbeb;
+  --accent-amber-border: rgba(217, 119, 6, 0.35);
+  --accent-pink-bg: #fdf2f8;
+  --accent-pink-border: rgba(219, 39, 119, 0.35);
 }
 
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
+  --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
+  --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
   --primary: oklch(0.985 0 0);
   --primary-foreground: oklch(0.205 0 0);
@@ -78,6 +106,30 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.269 0 0);
   --sidebar-ring: oklch(0.439 0 0);
+
+  --tone-subtle: #71717a;
+  --tone-faint: #52525b;
+  --tone-dim: #d1d1d6;
+  --tone-line: #52525b;
+  --tone-card-alt: #151517;
+  --tone-track-empty: #3f3f46;
+
+  --border-4: rgba(255, 255, 255, 0.05);
+  --border-5: rgba(255, 255, 255, 0.06);
+  --border-8: rgba(255, 255, 255, 0.1);
+  --border-10: rgba(255, 255, 255, 0.12);
+  --border-12: rgba(255, 255, 255, 0.14);
+  --border-14: rgba(255, 255, 255, 0.16);
+  --border-20: rgba(255, 255, 255, 0.22);
+
+  --unit-wolf-bg: rgba(59, 130, 246, 0.16);
+  --unit-fraga-bg: rgba(139, 92, 246, 0.16);
+  --unit-woncred-bg: rgba(16, 185, 129, 0.16);
+
+  --accent-amber-bg: rgba(217, 119, 6, 0.16);
+  --accent-amber-border: rgba(217, 119, 6, 0.45);
+  --accent-pink-bg: rgba(219, 39, 119, 0.16);
+  --accent-pink-border: rgba(219, 39, 119, 0.45);
 }
 
 @theme inline {

@@ -6,10 +6,11 @@ import {
   ChevronDown, CheckCircle2, AlertCircle, Clock, FileSpreadsheet, Printer,
   Trash2, Pencil, X, Check, Zap, Lock, Unlock, Shield,
   User, ChevronRight, CalendarDays, Send, MessageSquare,
-  ExternalLink, LogOut, KeyRound,
+  ExternalLink, LogOut, KeyRound, Moon, Sun,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import DailyRateio from "./DailyRateio";
+import { Switch } from "./components/ui/switch";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -124,10 +125,10 @@ export const UNIT_COLORS: Record<Unit, string> = {
 };
 
 export const UNIT_LIGHT: Record<Unit, string> = {
-  wolf: "#eff6ff",
-  fraga: "#f5f3ff",
-  woncred: "#ecfdf5",
-  profit: "#fffbeb",
+  wolf: "var(--unit-wolf-bg)",
+  fraga: "var(--unit-fraga-bg)",
+  woncred: "var(--unit-woncred-bg)",
+  profit: "var(--accent-amber-bg)",
 };
 
 export const MONTHS = [
@@ -257,7 +258,7 @@ const fmtDate = (iso: string) => {
 // ─── StatusBadge ──────────────────────────────────────────────────────────────
 
 function StatusBadge({ total, workingDays }: { total: number; workingDays: number }) {
-  if (total === 0) return <span className="inline-flex items-center gap-1 text-xs text-[#a1a1aa]"><Clock size={11} />Pendente</span>;
+  if (total === 0) return <span className="inline-flex items-center gap-1 text-xs text-[var(--tone-subtle)]"><Clock size={11} />Pendente</span>;
   if (total === workingDays) return <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600"><CheckCircle2 size={11} />Completo</span>;
   if (total > workingDays) return <span className="inline-flex items-center gap-1 text-xs font-medium text-red-500"><AlertCircle size={11} />{total}/{workingDays}</span>;
   return <span className="inline-flex items-center gap-1 text-xs text-amber-600"><AlertCircle size={11} />{total}/{workingDays}</span>;
@@ -265,9 +266,9 @@ function StatusBadge({ total, workingDays }: { total: number; workingDays: numbe
 
 function ProgressBar({ total, workingDays }: { total: number; workingDays: number }) {
   const pct = workingDays > 0 ? Math.min((total / workingDays) * 100, 100) : 0;
-  const color = total === workingDays ? "#10b981" : total > workingDays ? "#ef4444" : total > 0 ? "#f59e0b" : "#e4e4e7";
+  const color = total === workingDays ? "#10b981" : total > workingDays ? "#ef4444" : total > 0 ? "#f59e0b" : "var(--tone-track-empty)";
   return (
-    <div className="w-full h-1 bg-[#f1f1f3] rounded-full overflow-hidden">
+    <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
       <div className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, backgroundColor: color }} />
     </div>
   );
@@ -278,7 +279,7 @@ function ProgressBar({ total, workingDays }: { total: number; workingDays: numbe
 function Avatar({ name, size = 7 }: { name: string; size?: number }) {
   return (
     <div
-      className={`rounded-full bg-[#f1f1f3] flex items-center justify-center text-xs font-semibold text-[#71717a] shrink-0`}
+      className={`rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground shrink-0`}
       style={{ width: size * 4, height: size * 4 }}
     >
       {name.charAt(0)}
@@ -296,6 +297,8 @@ interface SidebarProps {
   displaySubtitle: string;
   onLogout: () => void;
   onChangePassword: () => void;
+  nightMode: boolean;
+  onToggleNightMode: () => void;
 }
 
 const ADMIN_NAV: { id: View; label: string; icon: React.ReactNode }[] = [
@@ -314,11 +317,11 @@ const COLLAB_NAV: { id: View; label: string; icon: React.ReactNode }[] = [
   { id: "diario", label: "Meu Rateio Diário", icon: <CalendarDays size={16} /> },
 ];
 
-function Sidebar({ active, onNav, role, displayName, displaySubtitle, onLogout, onChangePassword }: SidebarProps) {
+function Sidebar({ active, onNav, role, displayName, displaySubtitle, onLogout, onChangePassword, nightMode, onToggleNightMode }: SidebarProps) {
   const nav = role === "admin" ? ADMIN_NAV : COLLAB_NAV;
   return (
-    <aside className="w-56 shrink-0 h-screen flex flex-col border-r border-[rgba(0,0,0,0.06)] bg-white">
-      <div className="h-14 flex items-center px-5 border-b border-[rgba(0,0,0,0.06)]">
+    <aside className="w-56 shrink-0 h-screen flex flex-col border-r border-border bg-card">
+      <div className="h-14 flex items-center px-5 border-b border-border">
         <div className="flex items-center gap-2.5">
           <div className="w-6 h-6 bg-[#18181b] rounded-md flex items-center justify-center">
             <Zap size={12} className="text-white" />
@@ -333,35 +336,42 @@ function Sidebar({ active, onNav, role, displayName, displaySubtitle, onLogout, 
             onClick={() => onNav(item.id)}
             className={`w-full flex items-center gap-2.5 px-3 h-8 rounded-lg text-sm transition-all text-left ${
               active === item.id
-                ? "bg-[#f1f1f3] text-[#18181b] font-medium"
-                : "text-[#71717a] hover:text-[#18181b] hover:bg-[#f7f7f8]"
+                ? "bg-muted text-foreground font-medium"
+                : "text-muted-foreground hover:text-foreground hover:bg-background"
             }`}
           >
-            <span className={active === item.id ? "text-[#18181b]" : "text-[#a1a1aa]"}>{item.icon}</span>
+            <span className={active === item.id ? "text-foreground" : "text-[var(--tone-subtle)]"}>{item.icon}</span>
             {item.label}
           </button>
         ))}
       </nav>
       {/* Usuário logado */}
-      <div className="px-3 py-3 border-t border-[rgba(0,0,0,0.06)]">
+      <div className="px-3 py-3 border-t border-border">
         <div className="flex items-center gap-2.5 px-1 mb-2">
-          <div className="w-7 h-7 rounded-full bg-[#f1f1f3] flex items-center justify-center shrink-0">
-            {role === "admin" ? <Shield size={12} className="text-[#71717a]" /> : <User size={12} className="text-[#71717a]" />}
+          <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0">
+            {role === "admin" ? <Shield size={12} className="text-muted-foreground" /> : <User size={12} className="text-muted-foreground" />}
           </div>
           <div className="min-w-0">
             <p className="text-xs font-medium truncate">{displayName}</p>
-            <p className="text-[10px] text-[#a1a1aa] truncate">{displaySubtitle}</p>
+            <p className="text-[10px] text-[var(--tone-subtle)] truncate">{displaySubtitle}</p>
           </div>
+        </div>
+        <div className="w-full flex items-center gap-2 px-3 h-8 rounded-lg text-xs text-muted-foreground">
+          <span className="flex items-center gap-2 flex-1">
+            {nightMode ? <Moon size={13} /> : <Sun size={13} />}
+            Modo noturno
+          </span>
+          <Switch checked={nightMode} onCheckedChange={onToggleNightMode} aria-label="Alternar modo noturno" />
         </div>
         <button
           onClick={onChangePassword}
-          className="w-full flex items-center gap-2 px-3 h-7 rounded-lg text-xs text-[#71717a] hover:text-[#18181b] hover:bg-[#f7f7f8] transition-all"
+          className="w-full flex items-center gap-2 px-3 h-7 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-background transition-all"
         >
           <KeyRound size={13} />Alterar senha
         </button>
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-2 px-3 h-7 rounded-lg text-xs text-[#71717a] hover:text-red-500 hover:bg-red-50 transition-all"
+          className="w-full flex items-center gap-2 px-3 h-7 rounded-lg text-xs text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/15 transition-all"
         >
           <LogOut size={13} />Sair
         </button>
@@ -388,41 +398,41 @@ function CollaboratorForm({ initial, workingDays, onSave, onCancel }: Collaborat
   const daily = workingDays > 0 ? salaryNum / workingDays : 0;
   const valid = name.trim() && role.trim() && salaryNum > 0;
   return (
-    <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-5 space-y-4">
+    <div className="bg-card border border-border rounded-xl p-5 space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-medium text-[#71717a] mb-1.5">Nome</label>
-          <input className="w-full h-8 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" placeholder="Nome completo" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          <label className="block text-xs font-medium text-muted-foreground mb-1.5">Nome</label>
+          <input className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" placeholder="Nome completo" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#71717a] mb-1.5">Cargo</label>
-          <input className="w-full h-8 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" placeholder="Cargo" value={role} onChange={(e) => setRole(e.target.value)} />
+          <label className="block text-xs font-medium text-muted-foreground mb-1.5">Cargo</label>
+          <input className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" placeholder="Cargo" value={role} onChange={(e) => setRole(e.target.value)} />
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#71717a] mb-1.5">Salário Mensal</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1.5">Salário Mensal</label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#a1a1aa]">R$</span>
-            <input className="w-full h-8 pl-7 pr-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" placeholder="0,00" value={salary} onChange={(e) => setSalary(e.target.value)} style={{ fontFamily: "var(--font-mono)" }} />
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--tone-subtle)]">R$</span>
+            <input className="w-full h-8 pl-7 pr-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" placeholder="0,00" value={salary} onChange={(e) => setSalary(e.target.value)} style={{ fontFamily: "var(--font-mono)" }} />
           </div>
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#71717a] mb-1.5">Valor por Dia</label>
-          <div className="h-8 px-3 flex items-center text-sm rounded-lg bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] text-[#71717a]" style={{ fontFamily: "var(--font-mono)" }}>
+          <label className="block text-xs font-medium text-muted-foreground mb-1.5">Valor por Dia</label>
+          <div className="h-8 px-3 flex items-center text-sm rounded-lg bg-background border border-border text-muted-foreground" style={{ fontFamily: "var(--font-mono)" }}>
             {daily > 0 ? fmt(daily) : "—"}
           </div>
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#71717a] mb-1.5">Aniversário (opcional)</label>
-          <input type="date" className="w-full h-8 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} style={{ fontFamily: "var(--font-mono)" }} />
-          <p className="text-[10px] text-[#a1a1aa] mt-1">No mês do aniversário, 1 dia é descontado automaticamente do Rateio Mensal (day off).</p>
+          <label className="block text-xs font-medium text-muted-foreground mb-1.5">Aniversário (opcional)</label>
+          <input type="date" className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} style={{ fontFamily: "var(--font-mono)" }} />
+          <p className="text-[10px] text-[var(--tone-subtle)] mt-1">No mês do aniversário, 1 dia é descontado automaticamente do Rateio Mensal (day off).</p>
         </div>
       </div>
       <div className="flex items-center justify-end gap-2 pt-1">
-        <button onClick={onCancel} className="h-8 px-4 text-sm text-[#71717a] hover:text-[#18181b] rounded-lg hover:bg-[#f4f4f6] transition-all">Cancelar</button>
+        <button onClick={onCancel} className="h-8 px-4 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-input-background transition-all">Cancelar</button>
         {/* birthDate vai como "" (não undefined) quando limpo, pra garantir que o
             JSON enviado ao servidor tenha a chave e ele saiba que é pra apagar
             a data — undefined simplesmente some do corpo da requisição. */}
-        <button onClick={() => valid && onSave({ name: name.trim(), role: role.trim(), salary: salaryNum, birthDate })} disabled={!valid} className="h-8 px-4 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] disabled:opacity-40 disabled:cursor-not-allowed transition-all">Salvar</button>
+        <button onClick={() => valid && onSave({ name: name.trim(), role: role.trim(), salary: salaryNum, birthDate })} disabled={!valid} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">Salvar</button>
       </div>
     </div>
   );
@@ -469,7 +479,7 @@ export function OperationTagPicker({ value, disabled, onChange }: { value: Opera
             disabled={disabled}
             onClick={() => toggle(tag)}
             className={`h-5 px-1.5 rounded text-[9px] font-semibold uppercase tracking-wide border transition-all disabled:cursor-default ${
-              active ? "bg-[#8b5cf6] border-[#8b5cf6] text-white" : "bg-white border-[rgba(0,0,0,0.1)] text-[#a1a1aa] hover:border-[#8b5cf6]/50"
+              active ? "bg-[#8b5cf6] border-[#8b5cf6] text-white" : "bg-card border-[var(--border-10)] text-[var(--tone-subtle)] hover:border-[#8b5cf6]/50"
             }`}
           >
             {OPERATION_CHIP_LABELS[tag]}
@@ -517,7 +527,7 @@ function ProjectEntryInput({ projects, color, lightBg, disabled, showOperations,
               value={p.name}
               disabled={disabled}
               onChange={(e) => updateName(i, e.target.value)}
-              className="flex-1 h-7 px-2.5 text-xs font-medium bg-transparent border border-transparent rounded-lg outline-none focus:border-[rgba(0,0,0,0.1)] focus:bg-white transition-all disabled:cursor-default"
+              className="flex-1 h-7 px-2.5 text-xs font-medium bg-transparent border border-transparent rounded-lg outline-none focus:border-[var(--border-10)] focus:bg-card transition-all disabled:cursor-default"
               style={{ color }}
             />
             {/* Days */}
@@ -533,18 +543,18 @@ function ProjectEntryInput({ projects, color, lightBg, disabled, showOperations,
                 onBlur={(e) => updateDays(i, Number(e.target.value))}
                 className="w-10 h-7 text-center text-xs font-semibold rounded-lg border outline-none transition-all disabled:cursor-default"
                 style={{
-                  backgroundColor: p.days > 0 ? lightBg : "#f7f7f8",
-                  borderColor: p.days > 0 ? color + "40" : "rgba(0,0,0,0.07)",
-                  color: p.days > 0 ? color : "#71717a",
+                  backgroundColor: p.days > 0 ? lightBg : "var(--background)",
+                  borderColor: p.days > 0 ? color + "40" : "var(--border)",
+                  color: p.days > 0 ? color : "var(--muted-foreground)",
                   fontFamily: "var(--font-mono)",
                 }}
               />
-              <span className="text-[10px] text-[#a1a1aa] w-5">d</span>
+              <span className="text-[10px] text-[var(--tone-subtle)] w-5">d</span>
             </div>
             {!disabled && (
               <button
                 onClick={() => remove(i)}
-                className="w-5 h-5 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-400 text-[#c0c0c8] transition-all shrink-0"
+                className="w-5 h-5 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-400 text-[var(--tone-faint)] transition-all shrink-0"
               >
                 <X size={10} strokeWidth={2.5} />
               </button>
@@ -568,7 +578,7 @@ function ProjectEntryInput({ projects, color, lightBg, disabled, showOperations,
               if (e.key === "Enter") { e.preventDefault(); addProject(); }
             }}
             placeholder={projects.length === 0 ? `Nome do ${itemLabel}… Enter` : `+ adicionar ${itemLabel}…`}
-            className="flex-1 h-7 px-2.5 text-xs bg-[#f7f7f8] border border-dashed border-[rgba(0,0,0,0.12)] rounded-lg outline-none transition-all placeholder:text-[#c8c8d0] focus:bg-white"
+            className="flex-1 h-7 px-2.5 text-xs bg-background border border-dashed border-[var(--border-12)] rounded-lg outline-none transition-all placeholder:text-[var(--tone-faint)] focus:bg-card"
             onFocus={(e) => { e.currentTarget.style.borderColor = color + "60"; }}
             onBlur={(e) => { e.currentTarget.style.borderColor = ""; if (nameInput.trim()) addProject(); }}
           />
@@ -649,52 +659,52 @@ function AdminRateio({ releases, setReleases, collaborators, workingDays }: Admi
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Rateio Mensal</h1>
-            <p className="text-xs text-[#71717a] mt-0.5">Gerencie e libere os períodos de rateio</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Gerencie e libere os períodos de rateio</p>
           </div>
-          <button onClick={() => setCreating(true)} className="h-8 px-4 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] transition-all flex items-center gap-1.5">
+          <button onClick={() => setCreating(true)} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all flex items-center gap-1.5">
             <Plus size={14} />Liberar Rateio
           </button>
         </div>
 
         {creating && (
-          <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-5 space-y-4">
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
             <h3 className="text-sm font-semibold">Novo Período de Rateio</h3>
             <div className="grid grid-cols-4 gap-3">
               <div>
-                <label className="block text-xs font-medium text-[#71717a] mb-1.5">Mês</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Mês</label>
                 <div className="relative">
-                  <select value={form.month} onChange={(e) => setForm((f) => ({ ...f, month: Number(e.target.value) }))} className="w-full appearance-none h-8 pl-3 pr-7 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] cursor-pointer">
+                  <select value={form.month} onChange={(e) => setForm((f) => ({ ...f, month: Number(e.target.value) }))} className="w-full appearance-none h-8 pl-3 pr-7 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary cursor-pointer">
                     {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
                   </select>
-                  <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#a1a1aa] pointer-events-none" />
+                  <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--tone-subtle)] pointer-events-none" />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#71717a] mb-1.5">Ano</label>
-                <input type="number" value={form.year} onChange={(e) => setForm((f) => ({ ...f, year: Number(e.target.value) }))} className="w-full h-8 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" style={{ fontFamily: "var(--font-mono)" }} />
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Ano</label>
+                <input type="number" value={form.year} onChange={(e) => setForm((f) => ({ ...f, year: Number(e.target.value) }))} className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" style={{ fontFamily: "var(--font-mono)" }} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#71717a] mb-1.5">Dias Úteis</label>
-                <input type="number" min={1} max={31} value={form.workingDays} onChange={(e) => setForm((f) => ({ ...f, workingDays: Number(e.target.value) }))} className="w-full h-8 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" style={{ fontFamily: "var(--font-mono)" }} />
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Dias Úteis</label>
+                <input type="number" min={1} max={31} value={form.workingDays} onChange={(e) => setForm((f) => ({ ...f, workingDays: Number(e.target.value) }))} className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" style={{ fontFamily: "var(--font-mono)" }} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#71717a] mb-1.5">Data Limite</label>
-                <input type="date" value={form.deadline} onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))} className="w-full h-8 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" />
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Data Limite</label>
+                <input type="date" value={form.deadline} onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))} className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" />
               </div>
             </div>
             <div className="flex items-center justify-end gap-2">
-              <button onClick={() => setCreating(false)} className="h-8 px-4 text-sm text-[#71717a] hover:text-[#18181b] rounded-lg hover:bg-[#f4f4f6] transition-all">Cancelar</button>
-              <button onClick={createRelease} className="h-8 px-4 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] transition-all flex items-center gap-1.5"><Unlock size={13} />Liberar</button>
+              <button onClick={() => setCreating(false)} className="h-8 px-4 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-input-background transition-all">Cancelar</button>
+              <button onClick={createRelease} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all flex items-center gap-1.5"><Unlock size={13} />Liberar</button>
             </div>
           </div>
         )}
 
         {releases.length === 0 && !creating ? (
-          <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-16 flex flex-col items-center justify-center text-center">
-            <div className="w-10 h-10 bg-[#f1f1f3] rounded-xl flex items-center justify-center mb-3"><Lock size={18} className="text-[#a1a1aa]" /></div>
+          <div className="bg-card border border-border rounded-xl p-16 flex flex-col items-center justify-center text-center">
+            <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center mb-3"><Lock size={18} className="text-[var(--tone-subtle)]" /></div>
             <p className="text-sm font-medium">Nenhum período liberado</p>
-            <p className="text-xs text-[#a1a1aa] mt-1 mb-4">Libere um período para que os colaboradores possam preencher o rateio</p>
-            <button onClick={() => setCreating(true)} className="h-8 px-4 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] transition-all">Liberar primeiro período</button>
+            <p className="text-xs text-[var(--tone-subtle)] mt-1 mb-4">Libere um período para que os colaboradores possam preencher o rateio</p>
+            <button onClick={() => setCreating(true)} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all">Liberar primeiro período</button>
           </div>
         ) : (
           <div className="space-y-3">
@@ -703,25 +713,25 @@ function AdminRateio({ releases, setReleases, collaborators, workingDays }: Admi
               const done = r.entries.filter((e) => entryTotal(e) === requiredDays(r.workingDays, e)).length;
               const totalPossible = r.entries.reduce((s, e) => s + requiredDays(r.workingDays, e), 0);
               return (
-                <button key={r.id} onClick={() => setSelectedId(r.id)} className="w-full bg-white border border-[rgba(0,0,0,0.07)] rounded-xl px-5 py-4 text-left hover:border-[rgba(0,0,0,0.14)] hover:shadow-sm transition-all flex items-center gap-4">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${r.status === "approved" ? "bg-emerald-50" : "bg-blue-50"}`}>
+                <button key={r.id} onClick={() => setSelectedId(r.id)} className="w-full bg-card border border-border rounded-xl px-5 py-4 text-left hover:border-[var(--border-14)] hover:shadow-sm transition-all flex items-center gap-4">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${r.status === "approved" ? "bg-emerald-50 dark:bg-emerald-500/15" : "bg-blue-50 dark:bg-blue-500/15"}`}>
                     {r.status === "approved" ? <CheckCircle2 size={16} className="text-emerald-500" /> : <Unlock size={16} className="text-blue-500" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
                       <p className="text-sm font-semibold">{MONTHS[r.month]} {r.year}</p>
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${r.status === "approved" ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600"}`}>
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${r.status === "approved" ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600" : "bg-blue-50 dark:bg-blue-500/15 text-blue-600"}`}>
                         {r.status === "approved" ? "Aprovado" : "Aberto"}
                       </span>
-                      {r.deadline && <span className="text-[10px] text-[#a1a1aa]">Limite: {fmtDate(r.deadline)}</span>}
+                      {r.deadline && <span className="text-[10px] text-[var(--tone-subtle)]">Limite: {fmtDate(r.deadline)}</span>}
                     </div>
-                    <div className="flex items-center gap-4 text-xs text-[#71717a]">
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span>{r.workingDays} dias úteis</span>
                       <span>{done}/{r.entries.length} completos</span>
                       <span>{total}/{totalPossible} dias lançados</span>
                     </div>
                   </div>
-                  <ChevronRight size={16} className="text-[#a1a1aa] shrink-0" />
+                  <ChevronRight size={16} className="text-[var(--tone-subtle)] shrink-0" />
                 </button>
               );
             })}
@@ -831,18 +841,18 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
         <div className="px-8 py-6 space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <button onClick={onBack} className="text-xs text-[#71717a] hover:text-[#18181b] mb-2 flex items-center gap-1 transition-colors">← Todos os períodos</button>
+              <button onClick={onBack} className="text-xs text-muted-foreground hover:text-foreground mb-2 flex items-center gap-1 transition-colors">← Todos os períodos</button>
               <h1 className="text-xl font-semibold tracking-tight">Rateio — {MONTHS[release.month]} {release.year}</h1>
               <div className="flex items-center gap-3 mt-1">
-                <span className="text-xs text-[#71717a]">{release.workingDays} dias úteis</span>
-                {release.deadline && <span className="text-xs text-[#71717a]">Limite: {fmtDate(release.deadline)}</span>}
-                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${release.status === "approved" ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600"}`}>
+                <span className="text-xs text-muted-foreground">{release.workingDays} dias úteis</span>
+                {release.deadline && <span className="text-xs text-muted-foreground">Limite: {fmtDate(release.deadline)}</span>}
+                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${release.status === "approved" ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600" : "bg-blue-50 dark:bg-blue-500/15 text-blue-600"}`}>
                   {release.status === "approved" ? `Aprovado em ${fmtDate(release.approvedAt?.split("T")[0] ?? "")}` : "Aberto"}
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <button onClick={() => exportReleaseToExcel(release, collaborators)} className="h-8 px-4 text-sm font-medium bg-white border border-[rgba(0,0,0,0.07)] text-[#18181b] rounded-lg hover:border-[rgba(0,0,0,0.14)] transition-all flex items-center gap-1.5">
+              <button onClick={() => exportReleaseToExcel(release, collaborators)} className="h-8 px-4 text-sm font-medium bg-card border border-border text-foreground rounded-lg hover:border-[var(--border-14)] transition-all flex items-center gap-1.5">
                 <FileSpreadsheet size={14} />Exportar Excel
               </button>
               {release.status === "open" && (
@@ -853,21 +863,21 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
             </div>
           </div>
 
-          <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl overflow-hidden">
+          <div className="bg-card border border-border rounded-xl overflow-hidden">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-[rgba(0,0,0,0.06)]">
-                  <th className="text-left px-5 py-3 text-xs font-medium text-[#71717a]">Colaborador</th>
-                  <th className="text-right px-3 py-3 text-xs font-medium text-[#71717a]">Salário</th>
-                  <th className="text-right px-3 py-3 text-xs font-medium text-[#71717a]">Valor/Dia</th>
+                <tr className="border-b border-border">
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Colaborador</th>
+                  <th className="text-right px-3 py-3 text-xs font-medium text-muted-foreground">Salário</th>
+                  <th className="text-right px-3 py-3 text-xs font-medium text-muted-foreground">Valor/Dia</th>
                   {UNITS.map((u) => (
                     <th key={u} className="text-center px-3 py-3 text-xs font-medium" style={{ color: UNIT_COLORS[u] }}>
                       {u === "wolf" ? "Wolf" : u === "fraga" ? "Fraga" : u === "woncred" ? "Woncred" : "Profit"}
                     </th>
                   ))}
-                  <th className="text-center px-3 py-3 text-xs font-medium text-[#71717a]">Geral</th>
-                  <th className="text-center px-3 py-3 text-xs font-medium text-[#71717a] w-36">Progresso</th>
-                  <th className="text-center px-3 py-3 text-xs font-medium text-[#71717a]">Status</th>
+                  <th className="text-center px-3 py-3 text-xs font-medium text-muted-foreground">Geral</th>
+                  <th className="text-center px-3 py-3 text-xs font-medium text-muted-foreground w-36">Progresso</th>
+                  <th className="text-center px-3 py-3 text-xs font-medium text-muted-foreground">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -881,7 +891,7 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
                     <>
                       <tr
                         key={c.id}
-                        className={`border-b border-[rgba(0,0,0,0.04)] transition-colors cursor-pointer group ${total === target ? "bg-emerald-50/20" : total > target ? "bg-red-50/30" : ""}`}
+                        className={`border-b border-[var(--border-4)] transition-colors cursor-pointer group ${total === target ? "bg-emerald-50 dark:bg-emerald-500/15/20" : total > target ? "bg-red-50 dark:bg-red-500/15/30" : ""}`}
                         onClick={() => setExpandedId(isExpanded ? null : c.id)}
                       >
                         <td className="px-5 py-3">
@@ -891,28 +901,28 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
                               <div className="flex items-center gap-1.5">
                                 <p className="text-sm font-medium leading-tight">{c.name}</p>
                                 {UNITS.some((u) => (entry.unitProjects?.[u] ?? []).length > 0) && (
-                                  <span className="text-[9px] font-medium px-1 py-0.5 bg-[#f1f1f3] text-[#71717a] rounded">projetos</span>
+                                  <span className="text-[9px] font-medium px-1 py-0.5 bg-muted text-muted-foreground rounded">projetos</span>
                                 )}
                                 {atestadoTotal(entry) > 0 && (
-                                  <span className="text-[9px] font-medium px-1 py-0.5 bg-amber-50 text-amber-600 rounded">atestado {atestadoTotal(entry)}d</span>
+                                  <span className="text-[9px] font-medium px-1 py-0.5 bg-amber-50 dark:bg-amber-500/15 text-amber-600 rounded">atestado {atestadoTotal(entry)}d</span>
                                 )}
                                 {dayOffTotal(entry) > 0 && (
-                                  <span className="text-[9px] font-medium px-1 py-0.5 bg-pink-50 text-pink-600 rounded">🎂 day off {dayOffTotal(entry)}d</span>
+                                  <span className="text-[9px] font-medium px-1 py-0.5 bg-pink-50 dark:bg-pink-500/15 text-pink-600 rounded">🎂 day off {dayOffTotal(entry)}d</span>
                                 )}
                               </div>
-                              <p className="text-[11px] text-[#a1a1aa] leading-tight">{c.role}</p>
+                              <p className="text-[11px] text-[var(--tone-subtle)] leading-tight">{c.role}</p>
                             </div>
-                            <ChevronDown size={12} className={`text-[#c0c0c8] shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                            <ChevronDown size={12} className={`text-[var(--tone-faint)] shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                           </div>
                         </td>
-                        <td className="px-3 py-3 text-right text-sm tabular-nums text-[#71717a]" style={{ fontFamily: "var(--font-mono)" }}>{fmt(c.salary)}</td>
-                        <td className="px-3 py-3 text-right text-xs tabular-nums text-[#a1a1aa]" style={{ fontFamily: "var(--font-mono)" }}>{fmt(rate)}</td>
+                        <td className="px-3 py-3 text-right text-sm tabular-nums text-muted-foreground" style={{ fontFamily: "var(--font-mono)" }}>{fmt(c.salary)}</td>
+                        <td className="px-3 py-3 text-right text-xs tabular-nums text-[var(--tone-subtle)]" style={{ fontFamily: "var(--font-mono)" }}>{fmt(rate)}</td>
                         {UNITS.map((u) => {
                           const ud = unitTotal(entry, u);
                           return (
                             <td key={u} className="px-3 py-3 text-center">
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md tabular-nums ${ud > 0 ? "" : "text-[#d1d1d6]"}`} style={ud > 0 ? { color: UNIT_COLORS[u], backgroundColor: UNIT_LIGHT[u], fontFamily: "var(--font-mono)" } : { fontFamily: "var(--font-mono)" }}>
+                                <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md tabular-nums ${ud > 0 ? "" : "text-[var(--tone-line)]"}`} style={ud > 0 ? { color: UNIT_COLORS[u], backgroundColor: UNIT_LIGHT[u], fontFamily: "var(--font-mono)" } : { fontFamily: "var(--font-mono)" }}>
                                   {ud > 0 ? ud : "—"}
                                 </span>
                                 {ud > 0 && <span className="text-[9px] tabular-nums" style={{ color: UNIT_COLORS[u], fontFamily: "var(--font-mono)", opacity: 0.7 }}>{fmt(ud * rate)}</span>}
@@ -924,7 +934,7 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
                         {(() => { const gd = generalTotal(entry); return (
                           <td className="px-3 py-3 text-center">
                             <div className="flex flex-col items-center gap-0.5">
-                              <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md tabular-nums ${gd > 0 ? "bg-[#f4f4f6] text-[#52525b]" : "text-[#d1d1d6]"}`} style={{ fontFamily: "var(--font-mono)" }}>
+                              <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md tabular-nums ${gd > 0 ? "bg-input-background text-[var(--tone-dim)]" : "text-[var(--tone-line)]"}`} style={{ fontFamily: "var(--font-mono)" }}>
                                 {gd > 0 ? gd : "—"}
                               </span>
                             </div>
@@ -932,20 +942,20 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
                         ); })()}
                         <td className="px-3 py-3">
                           <div className="space-y-1">
-                            <span className="text-[10px] text-[#a1a1aa]" style={{ fontFamily: "var(--font-mono)" }}>{total}/{target}</span>
+                            <span className="text-[10px] text-[var(--tone-subtle)]" style={{ fontFamily: "var(--font-mono)" }}>{total}/{target}</span>
                             <ProgressBar total={total} workingDays={target} />
                           </div>
                         </td>
                         <td className="px-3 py-3 text-center"><StatusBadge total={total} workingDays={target} /></td>
                       </tr>
                       {isExpanded && (
-                        <tr key={`obs-${c.id}`} className="border-b border-[rgba(0,0,0,0.04)] bg-[#fafafa]">
+                        <tr key={`obs-${c.id}`} className="border-b border-[var(--border-4)] bg-[var(--tone-card-alt)]">
                           <td colSpan={8} className="px-5 py-4">
                             <div className="space-y-3">
                               {/* Projects per unit */}
                               {UNITS.some((u) => (entry.unitProjects?.[u] ?? []).length > 0) && (
                                 <div>
-                                  <p className="text-[10px] font-semibold text-[#71717a] uppercase tracking-wider mb-2">Projetos por unidade</p>
+                                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Projetos por unidade</p>
                                   <div className="flex flex-wrap gap-6">
                                     {UNITS.map((u) => {
                                       const projs = entry.unitProjects?.[u] ?? [];
@@ -960,7 +970,7 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
                                           <div className="space-y-1">
                                             {projs.map((p, pi) => (
                                               <div key={pi} className="flex items-center justify-between gap-3">
-                                                <span className="text-[11px] text-[#52525b] truncate flex items-center gap-1.5">
+                                                <span className="text-[11px] text-[var(--tone-dim)] truncate flex items-center gap-1.5">
                                                   {p.name}
                                                   {u === "fraga" && (p.operations ?? []).length > 0 && (
                                                     <span className="text-[9px] font-semibold uppercase tracking-wide px-1 py-0.5 rounded bg-[#8b5cf6]/10 text-[#8b5cf6] shrink-0">
@@ -981,10 +991,10 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
                               {/* Observations */}
                               {entry.observations && (
                                 <div className="flex items-start gap-2">
-                                  <MessageSquare size={13} className="text-[#a1a1aa] mt-0.5 shrink-0" />
+                                  <MessageSquare size={13} className="text-[var(--tone-subtle)] mt-0.5 shrink-0" />
                                   <div>
-                                    <p className="text-[10px] font-medium text-[#71717a] mb-0.5">Observações de {c.name}</p>
-                                    <p className="text-xs text-[#71717a] whitespace-pre-wrap">{entry.observations}</p>
+                                    <p className="text-[10px] font-medium text-muted-foreground mb-0.5">Observações de {c.name}</p>
+                                    <p className="text-xs text-muted-foreground whitespace-pre-wrap">{entry.observations}</p>
                                   </div>
                                 </div>
                               )}
@@ -992,15 +1002,15 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
                               {(entry.generalProjects ?? []).length > 0 && (
                                 <div>
                                   <div className="flex items-center gap-2 mb-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-[#a1a1aa]" />
-                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#71717a]">Demandas Gerais</p>
-                                    <span className="text-[10px] font-semibold tabular-nums text-[#71717a] ml-auto" style={{ fontFamily: "var(--font-mono)" }}>{generalTotal(entry)}d</span>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[var(--tone-subtle)]" />
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Demandas Gerais</p>
+                                    <span className="text-[10px] font-semibold tabular-nums text-muted-foreground ml-auto" style={{ fontFamily: "var(--font-mono)" }}>{generalTotal(entry)}d</span>
                                   </div>
                                   <div className="space-y-1">
                                     {(entry.generalProjects ?? []).map((p, pi) => (
                                       <div key={pi} className="flex items-center justify-between gap-3">
-                                        <span className="text-[11px] text-[#52525b] truncate">{p.name}</span>
-                                        <span className="text-[11px] font-semibold tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-[#f4f4f6] text-[#52525b]" style={{ fontFamily: "var(--font-mono)" }}>{p.days}d</span>
+                                        <span className="text-[11px] text-[var(--tone-dim)] truncate">{p.name}</span>
+                                        <span className="text-[11px] font-semibold tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-input-background text-[var(--tone-dim)]" style={{ fontFamily: "var(--font-mono)" }}>{p.days}d</span>
                                       </div>
                                     ))}
                                   </div>
@@ -1017,8 +1027,8 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
                                   <div className="space-y-1">
                                     {(entry.atestados ?? []).map((p, pi) => (
                                       <div key={pi} className="flex items-center justify-between gap-3">
-                                        <span className="text-[11px] text-[#52525b] truncate">{p.name}</span>
-                                        <span className="text-[11px] font-semibold tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-amber-50 text-amber-600" style={{ fontFamily: "var(--font-mono)" }}>{p.days}d</span>
+                                        <span className="text-[11px] text-[var(--tone-dim)] truncate">{p.name}</span>
+                                        <span className="text-[11px] font-semibold tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-500/15 text-amber-600" style={{ fontFamily: "var(--font-mono)" }}>{p.days}d</span>
                                       </div>
                                     ))}
                                   </div>
@@ -1035,15 +1045,15 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
                                   <div className="space-y-1">
                                     {(entry.dayOffs ?? []).map((p, pi) => (
                                       <div key={pi} className="flex items-center justify-between gap-3">
-                                        <span className="text-[11px] text-[#52525b] truncate">{p.name}</span>
-                                        <span className="text-[11px] font-semibold tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-pink-50 text-pink-600" style={{ fontFamily: "var(--font-mono)" }}>{p.days}d</span>
+                                        <span className="text-[11px] text-[var(--tone-dim)] truncate">{p.name}</span>
+                                        <span className="text-[11px] font-semibold tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-pink-50 dark:bg-pink-500/15 text-pink-600" style={{ fontFamily: "var(--font-mono)" }}>{p.days}d</span>
                                       </div>
                                     ))}
                                   </div>
                                 </div>
                               )}
                               {!entry.observations && !UNITS.some((u) => (entry.unitProjects?.[u] ?? []).length > 0) && !(entry.generalProjects ?? []).length && !(entry.atestados ?? []).length && !(entry.dayOffs ?? []).length && (
-                                <p className="text-xs text-[#a1a1aa] italic">Nenhuma informação adicional</p>
+                                <p className="text-xs text-[var(--tone-subtle)] italic">Nenhuma informação adicional</p>
                               )}
                             </div>
                           </td>
@@ -1059,9 +1069,9 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
       </div>
 
       {/* Right panel */}
-      <div className="w-60 shrink-0 border-l border-[rgba(0,0,0,0.06)] bg-white overflow-auto">
+      <div className="w-60 shrink-0 border-l border-border bg-card overflow-auto">
         <div className="p-5 space-y-5">
-          <h3 className="text-xs font-semibold text-[#71717a] uppercase tracking-wider">Resumo</h3>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Resumo</h3>
           {UNITS.map((u) => {
             const entry = unitTotals.find((x) => x.unit === u)!;
             const pct = totalRateado > 0 ? (entry.valor / totalRateado) * 100 : 0;
@@ -1072,20 +1082,20 @@ function AdminRateioDetail({ release, collaborators, onUpdateEntry, onApprove, o
                   <p className="text-xs font-medium">{UNIT_NAMES[u]}</p>
                 </div>
                 <div className="pl-4 flex items-center justify-between text-xs">
-                  <span className="text-[#a1a1aa]">Valor</span>
+                  <span className="text-[var(--tone-subtle)]">Valor</span>
                   <span className="font-medium tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmt(entry.valor)}</span>
                 </div>
-                <div className="pl-4 w-full h-1 bg-[#f1f1f3] rounded-full"><div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: UNIT_COLORS[u] }} /></div>
+                <div className="pl-4 w-full h-1 bg-muted rounded-full"><div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: UNIT_COLORS[u] }} /></div>
               </div>
             );
           })}
-          <div className="pt-3 border-t border-[rgba(0,0,0,0.06)] space-y-2">
+          <div className="pt-3 border-t border-border space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-[#71717a] font-medium">Total Folha</span>
+              <span className="text-muted-foreground font-medium">Total Folha</span>
               <span className="font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmt(totalFolha)}</span>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <span className="text-[#71717a] font-medium">Total Rateado</span>
+              <span className="text-muted-foreground font-medium">Total Rateado</span>
               <span className="font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmt(totalRateado)}</span>
             </div>
           </div>
@@ -1135,11 +1145,11 @@ function CollaboratorRateio({ releases, setReleases, collaborator, workingDays }
       <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Meu Rateio</h1>
-          <p className="text-xs text-[#71717a] mt-0.5">Olá, {collaborator.name} · {openReleases.length} período(s) aberto(s)</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Olá, {collaborator.name} · {openReleases.length} período(s) aberto(s)</p>
         </div>
 
         {openReleases.length > 0 && (
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+          <div className="bg-blue-50 dark:bg-blue-500/15 border border-blue-100 dark:border-blue-500/20 rounded-xl p-4">
             <p className="text-xs font-medium text-blue-700 mb-2">Períodos aguardando preenchimento</p>
             <div className="space-y-2">
               {openReleases.map((r) => {
@@ -1147,14 +1157,14 @@ function CollaboratorRateio({ releases, setReleases, collaborator, workingDays }
                 const total = entryTotal(entry);
                 const target = requiredDays(r.workingDays, entry);
                 return (
-                  <button key={r.id} onClick={() => setSelectedId(r.id)} className="w-full flex items-center justify-between bg-white rounded-lg px-4 py-2.5 text-left hover:shadow-sm transition-all border border-blue-100">
+                  <button key={r.id} onClick={() => setSelectedId(r.id)} className="w-full flex items-center justify-between bg-card rounded-lg px-4 py-2.5 text-left hover:shadow-sm transition-all border border-blue-100 dark:border-blue-500/20">
                     <div>
                       <p className="text-sm font-medium">{MONTHS[r.month]} {r.year}</p>
-                      <p className="text-[11px] text-[#71717a]">{r.workingDays} dias úteis{r.deadline ? ` · Limite: ${fmtDate(r.deadline)}` : ""}</p>
+                      <p className="text-[11px] text-muted-foreground">{r.workingDays} dias úteis{r.deadline ? ` · Limite: ${fmtDate(r.deadline)}` : ""}</p>
                     </div>
                     <div className="flex items-center gap-3">
                       <StatusBadge total={total} workingDays={target} />
-                      <ChevronRight size={14} className="text-[#a1a1aa]" />
+                      <ChevronRight size={14} className="text-[var(--tone-subtle)]" />
                     </div>
                   </button>
                 );
@@ -1164,23 +1174,23 @@ function CollaboratorRateio({ releases, setReleases, collaborator, workingDays }
         )}
 
         <div className="space-y-2">
-          <p className="text-xs font-medium text-[#71717a] uppercase tracking-wider">Histórico</p>
-          {allReleases.length === 0 && <p className="text-sm text-[#a1a1aa]">Nenhum período disponível ainda.</p>}
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Histórico</p>
+          {allReleases.length === 0 && <p className="text-sm text-[var(--tone-subtle)]">Nenhum período disponível ainda.</p>}
           {allReleases.map((r) => {
             const entry = r.entries.find((e) => e.collaboratorId === collaborator.id) ?? blankEntry(collaborator.id);
             const total = entryTotal(entry);
             const target = requiredDays(r.workingDays, entry);
             return (
-              <button key={r.id} onClick={() => setSelectedId(r.id)} className="w-full bg-white border border-[rgba(0,0,0,0.07)] rounded-xl px-5 py-3.5 text-left hover:border-[rgba(0,0,0,0.14)] transition-all flex items-center gap-3">
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${r.status === "approved" ? "bg-emerald-50" : "bg-blue-50"}`}>
+              <button key={r.id} onClick={() => setSelectedId(r.id)} className="w-full bg-card border border-border rounded-xl px-5 py-3.5 text-left hover:border-[var(--border-14)] transition-all flex items-center gap-3">
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${r.status === "approved" ? "bg-emerald-50 dark:bg-emerald-500/15" : "bg-blue-50 dark:bg-blue-500/15"}`}>
                   {r.status === "approved" ? <CheckCircle2 size={14} className="text-emerald-500" /> : <Unlock size={14} className="text-blue-500" />}
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-medium">{MONTHS[r.month]} {r.year}</p>
-                  <p className="text-[11px] text-[#a1a1aa]">{total}/{target} dias · {r.status === "approved" ? "Aprovado" : "Aberto"}</p>
+                  <p className="text-[11px] text-[var(--tone-subtle)]">{total}/{target} dias · {r.status === "approved" ? "Aprovado" : "Aberto"}</p>
                 </div>
                 <StatusBadge total={total} workingDays={target} />
-                <ChevronRight size={14} className="text-[#a1a1aa]" />
+                <ChevronRight size={14} className="text-[var(--tone-subtle)]" />
               </button>
             );
           })}
@@ -1253,9 +1263,9 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <button onClick={onBack} className="text-xs text-[#71717a] hover:text-[#18181b] mb-2 flex items-center gap-1 transition-colors">← Meu Rateio</button>
+            <button onClick={onBack} className="text-xs text-muted-foreground hover:text-foreground mb-2 flex items-center gap-1 transition-colors">← Meu Rateio</button>
             <h1 className="text-xl font-semibold tracking-tight">Rateio — {MONTHS[release.month]} {release.year}</h1>
-            <p className="text-xs text-[#71717a] mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               {release.workingDays} dias úteis
               {release.deadline ? ` · Limite: ${fmtDate(release.deadline)}` : ""}
               {isLocked ? " · Aprovado — somente leitura" : ""}
@@ -1267,11 +1277,11 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
                 onClick={fillFromDaily}
                 disabled={fillingFromDaily}
                 title="Preenche os projetos abaixo com o que já foi lançado no Rateio Diário deste mês"
-                className="h-8 px-3.5 text-sm font-medium bg-white border border-[rgba(0,0,0,0.1)] rounded-lg hover:border-[rgba(0,0,0,0.2)] transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-8 px-3.5 text-sm font-medium bg-card border border-[var(--border-10)] rounded-lg hover:border-[var(--border-20)] transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Zap size={13} />{fillingFromDaily ? "Buscando…" : "Preencher com o diário"}
               </button>
-              <button onClick={save} className={`h-8 px-4 text-sm font-medium rounded-lg transition-all flex items-center gap-1.5 ${savedFlash ? "bg-emerald-500 text-white" : "bg-[#18181b] text-white hover:bg-[#27272a]"}`}>
+              <button onClick={save} className={`h-8 px-4 text-sm font-medium rounded-lg transition-all flex items-center gap-1.5 ${savedFlash ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground hover:bg-primary/90"}`}>
                 {savedFlash ? <><Check size={13} />Salvo!</> : <><Send size={13} />Salvar Rateio</>}
               </button>
             </div>
@@ -1279,13 +1289,13 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
         </div>
 
         {/* Totalizador geral */}
-        <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-5">
+        <div className="bg-card border border-border rounded-xl p-5">
           <div className="flex items-end justify-between mb-3">
             <div>
-              <p className="text-[10px] font-semibold text-[#71717a] uppercase tracking-wider mb-0.5">Total geral</p>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Total geral</p>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-3xl font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)", color: total > target ? "#ef4444" : total === target ? "#10b981" : "#18181b" }}>{total}</span>
-                <span className="text-sm text-[#a1a1aa]">/ {target} dias</span>
+                <span className="text-3xl font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)", color: total > target ? "#ef4444" : total === target ? "#10b981" : "var(--foreground)" }}>{total}</span>
+                <span className="text-sm text-[var(--tone-subtle)]">/ {target} dias</span>
               </div>
               {atestadoTotal(draft) > 0 && (
                 <p className="text-[10px] text-amber-600 mt-0.5">
@@ -1314,8 +1324,8 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
               })}
               {generalTotal(draft) > 0 && (
                 <div className="text-center">
-                  <p className="text-[9px] font-medium uppercase tracking-wider mb-0.5 text-[#a1a1aa]">Geral</p>
-                  <p className="text-base font-semibold tabular-nums text-[#71717a]" style={{ fontFamily: "var(--font-mono)" }}>{generalTotal(draft)}</p>
+                  <p className="text-[9px] font-medium uppercase tracking-wider mb-0.5 text-[var(--tone-subtle)]">Geral</p>
+                  <p className="text-base font-semibold tabular-nums text-muted-foreground" style={{ fontFamily: "var(--font-mono)" }}>{generalTotal(draft)}</p>
                 </div>
               )}
               {atestadoTotal(draft) > 0 && (
@@ -1350,33 +1360,33 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
           const aItems = draft.atestados ?? [];
           return (
             <div
-              className="bg-white border rounded-xl p-5 transition-all"
-              style={{ borderColor: ad > 0 ? "rgba(217,119,6,0.35)" : "rgba(0,0,0,0.07)" }}
+              className="bg-card border rounded-xl p-5 transition-all"
+              style={{ borderColor: ad > 0 ? "var(--accent-amber-border)" : "var(--border)" }}
             >
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-amber-500" />
                   <p className="text-sm font-semibold">Atestado</p>
-                  <span className="text-[10px] text-[#a1a1aa] font-normal">cada dia lançado reduz 1 dia do total a distribuir</span>
+                  <span className="text-[10px] text-[var(--tone-subtle)] font-normal">cada dia lançado reduz 1 dia do total a distribuir</span>
                 </div>
                 <span
                   className="text-sm font-bold tabular-nums px-2 py-0.5 rounded-lg"
                   style={{
                     fontFamily: "var(--font-mono)",
-                    backgroundColor: ad > 0 ? "#fffbeb" : "#f7f7f8",
-                    color: ad > 0 ? "#d97706" : "#c0c0c8",
+                    backgroundColor: ad > 0 ? "var(--accent-amber-bg)" : "var(--background)",
+                    color: ad > 0 ? "#d97706" : "var(--tone-faint)",
                   }}
                 >
                   {ad > 0 ? `${ad}d` : "0d"}
                 </span>
               </div>
               {aItems.length === 0 && isLocked && (
-                <p className="text-xs text-[#c0c0c8] italic">Nenhum atestado lançado</p>
+                <p className="text-xs text-[var(--tone-faint)] italic">Nenhum atestado lançado</p>
               )}
               <ProjectEntryInput
                 projects={aItems}
                 color="#d97706"
-                lightBg="#fffbeb"
+                lightBg="var(--accent-amber-bg)"
                 disabled={isLocked}
                 itemLabel="atestado (ex: data e motivo)"
                 onChange={(updated) => setDraft((d) => ({ ...d, atestados: updated }))}
@@ -1393,33 +1403,33 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
           const dItems = draft.dayOffs ?? [];
           return (
             <div
-              className="bg-white border rounded-xl p-5 transition-all"
-              style={{ borderColor: dd > 0 ? "rgba(219,39,119,0.35)" : "rgba(0,0,0,0.07)" }}
+              className="bg-card border rounded-xl p-5 transition-all"
+              style={{ borderColor: dd > 0 ? "var(--accent-pink-border)" : "var(--border)" }}
             >
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-pink-500" />
                   <p className="text-sm font-semibold">🎂 Day off de aniversário</p>
-                  <span className="text-[10px] text-[#a1a1aa] font-normal">marcado no Rateio Diário, no dia do aniversário</span>
+                  <span className="text-[10px] text-[var(--tone-subtle)] font-normal">marcado no Rateio Diário, no dia do aniversário</span>
                 </div>
                 <span
                   className="text-sm font-bold tabular-nums px-2 py-0.5 rounded-lg"
                   style={{
                     fontFamily: "var(--font-mono)",
-                    backgroundColor: dd > 0 ? "#fdf2f8" : "#f7f7f8",
-                    color: dd > 0 ? "#db2777" : "#c0c0c8",
+                    backgroundColor: dd > 0 ? "var(--accent-pink-bg)" : "var(--background)",
+                    color: dd > 0 ? "#db2777" : "var(--tone-faint)",
                   }}
                 >
                   {dd > 0 ? `${dd}d` : "0d"}
                 </span>
               </div>
               {dItems.length === 0 && (
-                <p className="text-xs text-[#c0c0c8] italic">Nenhum day off marcado ainda — use "Preencher com o diário" depois de marcar no Rateio Diário.</p>
+                <p className="text-xs text-[var(--tone-faint)] italic">Nenhum day off marcado ainda — use "Preencher com o diário" depois de marcar no Rateio Diário.</p>
               )}
               <ProjectEntryInput
                 projects={dItems}
                 color="#db2777"
-                lightBg="#fdf2f8"
+                lightBg="var(--accent-pink-bg)"
                 disabled={isLocked}
                 itemLabel="day off (ex: data do aniversário)"
                 onChange={(updated) => setDraft((d) => ({ ...d, dayOffs: updated }))}
@@ -1436,8 +1446,8 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
             return (
               <div
                 key={u}
-                className="bg-white border rounded-xl p-5 transition-all"
-                style={{ borderColor: ud > 0 ? UNIT_COLORS[u] + "30" : "rgba(0,0,0,0.07)" }}
+                className="bg-card border rounded-xl p-5 transition-all"
+                style={{ borderColor: ud > 0 ? UNIT_COLORS[u] + "30" : "var(--border)" }}
               >
                 {/* Card header: label + total */}
                 <div className="flex items-center justify-between mb-1">
@@ -1445,7 +1455,7 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: UNIT_COLORS[u] }} />
                     <p className="text-sm font-semibold">{UNIT_NAMES[u]}</p>
                     {u === "fraga" && (
-                      <span className="text-[9px] text-[#a1a1aa] font-normal">marque a operação de cada atividade</span>
+                      <span className="text-[9px] text-[var(--tone-subtle)] font-normal">marque a operação de cada atividade</span>
                     )}
                   </div>
                   {/* Totalizador do centro */}
@@ -1453,15 +1463,15 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
                     className="text-sm font-bold tabular-nums px-2 py-0.5 rounded-lg"
                     style={{
                       fontFamily: "var(--font-mono)",
-                      backgroundColor: ud > 0 ? UNIT_LIGHT[u] : "#f7f7f8",
-                      color: ud > 0 ? UNIT_COLORS[u] : "#c0c0c8",
+                      backgroundColor: ud > 0 ? UNIT_LIGHT[u] : "var(--background)",
+                      color: ud > 0 ? UNIT_COLORS[u] : "var(--tone-faint)",
                     }}
                   >
                     {ud > 0 ? `${ud}d` : "0d"}
                   </span>
                 </div>
                 {/* Barra de progresso da unidade */}
-                <div className="w-full h-0.5 bg-[#f1f1f3] rounded-full mb-4">
+                <div className="w-full h-0.5 bg-muted rounded-full mb-4">
                   {ud > 0 && (
                     <div
                       className="h-full rounded-full transition-all"
@@ -1474,7 +1484,7 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
                 </div>
                 {/* Lista de projetos */}
                 {projs.length === 0 && isLocked && (
-                  <p className="text-xs text-[#c0c0c8] italic">Nenhum projeto lançado</p>
+                  <p className="text-xs text-[var(--tone-faint)] italic">Nenhum projeto lançado</p>
                 )}
                 <ProjectEntryInput
                   projects={projs}
@@ -1495,41 +1505,41 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
           const gProjs = draft.generalProjects ?? [];
           return (
             <div
-              className="bg-white border rounded-xl p-5 transition-all"
-              style={{ borderColor: gd > 0 ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.07)" }}
+              className="bg-card border rounded-xl p-5 transition-all"
+              style={{ borderColor: gd > 0 ? "var(--border-12)" : "var(--border)" }}
             >
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-[#a1a1aa]" />
+                  <div className="w-2 h-2 rounded-full bg-[var(--tone-subtle)]" />
                   <p className="text-sm font-semibold">Demandas Gerais</p>
-                  <span className="text-[10px] text-[#a1a1aa] font-normal">todos os centros de custo</span>
+                  <span className="text-[10px] text-[var(--tone-subtle)] font-normal">todos os centros de custo</span>
                 </div>
                 <span
                   className="text-sm font-bold tabular-nums px-2 py-0.5 rounded-lg"
                   style={{
                     fontFamily: "var(--font-mono)",
-                    backgroundColor: gd > 0 ? "#f4f4f6" : "#f7f7f8",
-                    color: gd > 0 ? "#52525b" : "#c0c0c8",
+                    backgroundColor: gd > 0 ? "var(--input-background)" : "var(--background)",
+                    color: gd > 0 ? "var(--tone-dim)" : "var(--tone-faint)",
                   }}
                 >
                   {gd > 0 ? `${gd}d` : "0d"}
                 </span>
               </div>
-              <div className="w-full h-0.5 bg-[#f1f1f3] rounded-full mb-4">
+              <div className="w-full h-0.5 bg-muted rounded-full mb-4">
                 {gd > 0 && (
                   <div
-                    className="h-full rounded-full bg-[#a1a1aa] transition-all"
+                    className="h-full rounded-full bg-[var(--tone-subtle)] transition-all"
                     style={{ width: `${Math.min((gd / target) * 100, 100)}%` }}
                   />
                 )}
               </div>
               {gProjs.length === 0 && isLocked && (
-                <p className="text-xs text-[#c0c0c8] italic">Nenhuma demanda geral lançada</p>
+                <p className="text-xs text-[var(--tone-faint)] italic">Nenhuma demanda geral lançada</p>
               )}
               <ProjectEntryInput
                 projects={gProjs}
-                color="#71717a"
-                lightBg="#f4f4f6"
+                color="var(--muted-foreground)"
+                lightBg="var(--input-background)"
                 disabled={isLocked}
                 onChange={(updated) => setDraft((d) => ({ ...d, generalProjects: updated }))}
               />
@@ -1538,25 +1548,25 @@ function CollaboratorRateioFill({ release, entry: initialEntry, collaborator, on
         })()}
 
         {/* Observations */}
-        <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-5">
+        <div className="bg-card border border-border rounded-xl p-5">
           <div className="flex items-center gap-2 mb-3">
-            <MessageSquare size={14} className="text-[#a1a1aa]" />
+            <MessageSquare size={14} className="text-[var(--tone-subtle)]" />
             <p className="text-sm font-semibold">Observações de Atividades</p>
           </div>
-          <p className="text-xs text-[#a1a1aa] mb-3">Explique brevemente o que foi feito em cada unidade e os motivos de cada distribuição de dias.</p>
+          <p className="text-xs text-[var(--tone-subtle)] mb-3">Explique brevemente o que foi feito em cada unidade e os motivos de cada distribuição de dias.</p>
           <textarea
             value={draft.observations}
             disabled={isLocked}
             onChange={(e) => setDraft({ ...draft, observations: e.target.value })}
             placeholder="Ex: Trabalhei 10 dias na Wolf finalizando o módulo de relatórios. 8 dias na Fraga por conta da integração com o ERP..."
             rows={5}
-            className="w-full text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg px-4 py-3 outline-none focus:border-[#18181b] focus:bg-white transition-all resize-none text-[#18181b] placeholder:text-[#c0c0c8] disabled:opacity-50"
+            className="w-full text-sm bg-background border border-border rounded-lg px-4 py-3 outline-none focus:border-primary focus:bg-card transition-all resize-none text-foreground placeholder:text-[var(--tone-faint)] disabled:opacity-50"
           />
         </div>
 
         {!isLocked && (
           <div className="flex justify-end">
-            <button onClick={save} className={`h-9 px-6 text-sm font-medium rounded-lg transition-all flex items-center gap-2 ${savedFlash ? "bg-emerald-500 text-white" : "bg-[#18181b] text-white hover:bg-[#27272a]"}`}>
+            <button onClick={save} className={`h-9 px-6 text-sm font-medium rounded-lg transition-all flex items-center gap-2 ${savedFlash ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground hover:bg-primary/90"}`}>
               {savedFlash ? <><Check size={14} />Rateio Salvo!</> : <><Send size={14} />Salvar Rateio</>}
             </button>
           </div>
@@ -1586,15 +1596,15 @@ function ProjectExport({ project, collaborators, workingDays, onClose }: Project
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-8">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-auto">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-auto">
         {/* Toolbar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(0,0,0,0.07)] print:hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border print:hidden">
           <p className="text-sm font-medium">Exportar Projeto</p>
           <div className="flex items-center gap-2">
-            <button onClick={() => window.print()} className="h-8 px-3 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] transition-all flex items-center gap-1.5">
+            <button onClick={() => window.print()} className="h-8 px-3 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all flex items-center gap-1.5">
               <Printer size={13} />Imprimir / PDF
             </button>
-            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center text-[#71717a] hover:text-[#18181b] hover:bg-[#f4f4f6] rounded-lg transition-all"><X size={16} /></button>
+            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-input-background rounded-lg transition-all"><X size={16} /></button>
           </div>
         </div>
 
@@ -1607,15 +1617,15 @@ function ProjectExport({ project, collaborators, workingDays, onClose }: Project
                 <div className="w-5 h-5 bg-[#18181b] rounded flex items-center justify-center">
                   <Zap size={10} className="text-white" />
                 </div>
-                <span className="text-xs font-semibold text-[#71717a] uppercase tracking-wider">Equipe de TI</span>
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Equipe de TI</span>
               </div>
               <h1 className="text-2xl font-bold tracking-tight mt-3">{project.name}</h1>
-              {project.description && <p className="text-sm text-[#71717a] mt-1">{project.description}</p>}
+              {project.description && <p className="text-sm text-muted-foreground mt-1">{project.description}</p>}
             </div>
             <div className="text-right">
-              <p className="text-xs text-[#a1a1aa]">Emitido em</p>
+              <p className="text-xs text-[var(--tone-subtle)]">Emitido em</p>
               <p className="text-sm font-medium">{today}</p>
-              {project.requester && <><p className="text-xs text-[#a1a1aa] mt-2">Solicitante</p><p className="text-sm font-medium">{project.requester}</p></>}
+              {project.requester && <><p className="text-xs text-[var(--tone-subtle)] mt-2">Solicitante</p><p className="text-sm font-medium">{project.requester}</p></>}
             </div>
           </div>
 
@@ -1626,41 +1636,41 @@ function ProjectExport({ project, collaborators, workingDays, onClose }: Project
               { label: "Início", value: project.startDate ? fmtDate(project.startDate) : "—" },
               { label: "Término", value: project.endDate ? fmtDate(project.endDate) : "—" },
             ].map((item) => (
-              <div key={item.label} className="bg-[#f7f7f8] rounded-xl p-4">
-                <p className="text-[10px] font-medium text-[#a1a1aa] uppercase tracking-wider mb-1">{item.label}</p>
+              <div key={item.label} className="bg-background rounded-xl p-4">
+                <p className="text-[10px] font-medium text-[var(--tone-subtle)] uppercase tracking-wider mb-1">{item.label}</p>
                 <p className="text-sm font-semibold">{item.value}</p>
               </div>
             ))}
           </div>
 
-          <div className="border-t border-[rgba(0,0,0,0.06)]" />
+          <div className="border-t border-border" />
 
           {/* Team */}
           <div>
             <h2 className="text-sm font-semibold mb-4">Equipe do Projeto</h2>
             <table className="w-full">
               <thead>
-                <tr className="border-b border-[rgba(0,0,0,0.08)]">
-                  <th className="text-left pb-2 text-xs font-medium text-[#71717a]">Colaborador</th>
-                  <th className="text-left pb-2 text-xs font-medium text-[#71717a]">Cargo</th>
-                  <th className="text-center pb-2 text-xs font-medium text-[#71717a]">Dias</th>
-                  <th className="text-right pb-2 text-xs font-medium text-[#71717a]">Custo</th>
-                  <th className="text-right pb-2 text-xs font-medium text-[#71717a]">%</th>
+                <tr className="border-b border-[var(--border-8)]">
+                  <th className="text-left pb-2 text-xs font-medium text-muted-foreground">Colaborador</th>
+                  <th className="text-left pb-2 text-xs font-medium text-muted-foreground">Cargo</th>
+                  <th className="text-center pb-2 text-xs font-medium text-muted-foreground">Dias</th>
+                  <th className="text-right pb-2 text-xs font-medium text-muted-foreground">Custo</th>
+                  <th className="text-right pb-2 text-xs font-medium text-muted-foreground">%</th>
                 </tr>
               </thead>
               <tbody>
                 {members.map((m) => (
-                  <tr key={m.collaboratorId} className="border-b border-[rgba(0,0,0,0.04)]">
+                  <tr key={m.collaboratorId} className="border-b border-[var(--border-4)]">
                     <td className="py-2.5 text-sm font-medium">{m.name}</td>
-                    <td className="py-2.5 text-xs text-[#71717a]">{m.role}</td>
+                    <td className="py-2.5 text-xs text-muted-foreground">{m.role}</td>
                     <td className="py-2.5 text-center text-sm tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{m.days}</td>
                     <td className="py-2.5 text-right text-sm font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmt(m.cost)}</td>
-                    <td className="py-2.5 text-right text-xs text-[#a1a1aa] tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{total > 0 ? ((m.cost / total) * 100).toFixed(1) : 0}%</td>
+                    <td className="py-2.5 text-right text-xs text-[var(--tone-subtle)] tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{total > 0 ? ((m.cost / total) * 100).toFixed(1) : 0}%</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-[#18181b]">
+                <tr className="border-t-2 border-primary">
                   <td colSpan={2} className="pt-3 text-sm font-bold">Total do Projeto</td>
                   <td className="pt-3 text-center text-sm font-bold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{members.reduce((s, m) => s + m.days, 0)}</td>
                   <td className="pt-3 text-right text-sm font-bold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmt(total)}</td>
@@ -1670,7 +1680,7 @@ function ProjectExport({ project, collaborators, workingDays, onClose }: Project
             </table>
           </div>
 
-          <div className="border-t border-[rgba(0,0,0,0.06)]" />
+          <div className="border-t border-border" />
 
           {/* Cost center breakdown */}
           <div>
@@ -1684,9 +1694,9 @@ function ProjectExport({ project, collaborators, workingDays, onClose }: Project
                     <div className="flex items-center gap-2 w-40">
                       <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: UNIT_COLORS[u] }} />
                       <span className="text-sm font-medium">{UNIT_NAMES[u]}</span>
-                      {project.costCenters.length > 1 && <span className="text-xs text-[#a1a1aa]">{project.splits[u]}%</span>}
+                      {project.costCenters.length > 1 && <span className="text-xs text-[var(--tone-subtle)]">{project.splits[u]}%</span>}
                     </div>
-                    <div className="flex-1 h-2 bg-[#f1f1f3] rounded-full">
+                    <div className="flex-1 h-2 bg-muted rounded-full">
                       <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: UNIT_COLORS[u] }} />
                     </div>
                     <span className="text-sm font-semibold tabular-nums w-28 text-right" style={{ fontFamily: "var(--font-mono)", color: UNIT_COLORS[u] }}>{fmt(uCost)}</span>
@@ -1697,9 +1707,9 @@ function ProjectExport({ project, collaborators, workingDays, onClose }: Project
           </div>
 
           {/* Footer */}
-          <div className="border-t border-[rgba(0,0,0,0.06)] pt-4 flex items-center justify-between">
-            <p className="text-[10px] text-[#a1a1aa]">Gerado pelo Sistema de Rateio TI · {today}</p>
-            <p className="text-[10px] text-[#a1a1aa]">Documento interno — uso confidencial</p>
+          <div className="border-t border-border pt-4 flex items-center justify-between">
+            <p className="text-[10px] text-[var(--tone-subtle)]">Gerado pelo Sistema de Rateio TI · {today}</p>
+            <p className="text-[10px] text-[var(--tone-subtle)]">Documento interno — uso confidencial</p>
           </div>
         </div>
       </div>
@@ -1755,73 +1765,73 @@ function ProjectDetail({ project, collaborators, workingDays, onChange, onDelete
           {/* Header */}
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <button onClick={onBack} className="text-xs text-[#71717a] hover:text-[#18181b] mb-3 flex items-center gap-1 transition-colors">← Todos os projetos</button>
+              <button onClick={onBack} className="text-xs text-muted-foreground hover:text-foreground mb-3 flex items-center gap-1 transition-colors">← Todos os projetos</button>
               {editingName ? (
-                <input autoFocus className="text-xl font-semibold tracking-tight bg-transparent border-b border-[#18181b] outline-none w-full max-w-sm" value={draft.name} onChange={(e) => update({ ...draft, name: e.target.value })} onBlur={() => setEditingName(false)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") (e.target as HTMLInputElement).blur(); }} />
+                <input autoFocus className="text-xl font-semibold tracking-tight bg-transparent border-b border-primary outline-none w-full max-w-sm" value={draft.name} onChange={(e) => update({ ...draft, name: e.target.value })} onBlur={() => setEditingName(false)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") (e.target as HTMLInputElement).blur(); }} />
               ) : (
                 <h1 className="text-xl font-semibold tracking-tight cursor-text hover:opacity-70 transition-opacity" onClick={() => setEditingName(true)}>{draft.name}</h1>
               )}
               {editingDesc ? (
-                <input autoFocus className="text-sm text-[#71717a] bg-transparent border-b border-[#d1d1d6] outline-none w-full max-w-md mt-1" value={draft.description} placeholder="Adicionar descrição..." onChange={(e) => update({ ...draft, description: e.target.value })} onBlur={() => setEditingDesc(false)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") (e.target as HTMLInputElement).blur(); }} />
+                <input autoFocus className="text-sm text-muted-foreground bg-transparent border-b border-[var(--tone-line)] outline-none w-full max-w-md mt-1" value={draft.description} placeholder="Adicionar descrição..." onChange={(e) => update({ ...draft, description: e.target.value })} onBlur={() => setEditingDesc(false)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") (e.target as HTMLInputElement).blur(); }} />
               ) : (
-                <p className="text-sm text-[#71717a] mt-1 cursor-text hover:opacity-70 transition-opacity" onClick={() => setEditingDesc(true)}>
-                  {draft.description || <span className="text-[#c0c0c8] italic">Clique para adicionar descrição...</span>}
+                <p className="text-sm text-muted-foreground mt-1 cursor-text hover:opacity-70 transition-opacity" onClick={() => setEditingDesc(true)}>
+                  {draft.description || <span className="text-[var(--tone-faint)] italic">Clique para adicionar descrição...</span>}
                 </p>
               )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <div className="relative">
-                <select value={draft.month} onChange={(e) => update({ ...draft, month: Number(e.target.value) })} className="appearance-none h-8 pl-3 pr-8 text-sm bg-white border border-[rgba(0,0,0,0.07)] rounded-lg outline-none hover:border-[rgba(0,0,0,0.14)] transition-all cursor-pointer">
+                <select value={draft.month} onChange={(e) => update({ ...draft, month: Number(e.target.value) })} className="appearance-none h-8 pl-3 pr-8 text-sm bg-card border border-border rounded-lg outline-none hover:border-[var(--border-14)] transition-all cursor-pointer">
                   {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
                 </select>
-                <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#a1a1aa] pointer-events-none" />
+                <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--tone-subtle)] pointer-events-none" />
               </div>
-              <span className="text-sm text-[#71717a]">{draft.year}</span>
-              <button onClick={() => setExporting(true)} className="h-8 px-3 text-sm text-[#71717a] hover:text-[#18181b] bg-white border border-[rgba(0,0,0,0.07)] rounded-lg hover:border-[rgba(0,0,0,0.14)] transition-all flex items-center gap-1.5">
+              <span className="text-sm text-muted-foreground">{draft.year}</span>
+              <button onClick={() => setExporting(true)} className="h-8 px-3 text-sm text-muted-foreground hover:text-foreground bg-card border border-border rounded-lg hover:border-[var(--border-14)] transition-all flex items-center gap-1.5">
                 <ExternalLink size={13} />Exportar
               </button>
-              <button onClick={save} className={`h-8 px-4 text-sm font-medium rounded-lg transition-all flex items-center gap-1.5 ${savedFlash ? "bg-emerald-500 text-white" : isDirty ? "bg-[#18181b] text-white hover:bg-[#27272a]" : "bg-[#f1f1f3] text-[#71717a]"}`}>
+              <button onClick={save} className={`h-8 px-4 text-sm font-medium rounded-lg transition-all flex items-center gap-1.5 ${savedFlash ? "bg-emerald-500 text-white" : isDirty ? "bg-primary text-primary-foreground hover:bg-primary/90" : "bg-muted text-muted-foreground"}`}>
                 {savedFlash ? <><Check size={13} />Salvo</> : <><Check size={13} />Salvar</>}
               </button>
-              <button onClick={onDelete} className="h-8 px-3 text-sm text-red-500 hover:text-red-600 hover:bg-red-50 border border-[rgba(0,0,0,0.07)] rounded-lg transition-all flex items-center gap-1.5">
+              <button onClick={onDelete} className="h-8 px-3 text-sm text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/15 border border-border rounded-lg transition-all flex items-center gap-1.5">
                 <Trash2 size={13} />
               </button>
             </div>
           </div>
 
           {/* Requester + Dates */}
-          <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-5">
+          <div className="bg-card border border-border rounded-xl p-5">
             <h3 className="text-sm font-semibold mb-4">Informações do Projeto</h3>
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-[#71717a] mb-1.5">Solicitante</label>
-                <input value={draft.requester} onChange={(e) => update({ ...draft, requester: e.target.value })} placeholder="Nome do solicitante" className="w-full h-8 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" />
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Solicitante</label>
+                <input value={draft.requester} onChange={(e) => update({ ...draft, requester: e.target.value })} placeholder="Nome do solicitante" className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#71717a] mb-1.5">Data de Início</label>
-                <input type="date" value={draft.startDate} onChange={(e) => update({ ...draft, startDate: e.target.value })} className="w-full h-8 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" />
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Data de Início</label>
+                <input type="date" value={draft.startDate} onChange={(e) => update({ ...draft, startDate: e.target.value })} className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#71717a] mb-1.5">Data de Término</label>
-                <input type="date" value={draft.endDate} onChange={(e) => update({ ...draft, endDate: e.target.value })} className="w-full h-8 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" />
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Data de Término</label>
+                <input type="date" value={draft.endDate} onChange={(e) => update({ ...draft, endDate: e.target.value })} className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" />
               </div>
             </div>
           </div>
 
           {/* Summary cards */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-5">
-              <p className="text-xs text-[#71717a] font-medium mb-1.5">Custo Total</p>
+            <div className="bg-card border border-border rounded-xl p-5">
+              <p className="text-xs text-muted-foreground font-medium mb-1.5">Custo Total</p>
               <p className="text-xl font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmt(total)}</p>
-              <p className="text-xs text-[#a1a1aa] mt-1">{draft.members.filter((m) => m.days > 0).length} colaboradores</p>
+              <p className="text-xs text-[var(--tone-subtle)] mt-1">{draft.members.filter((m) => m.days > 0).length} colaboradores</p>
             </div>
-            <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-5">
-              <p className="text-xs text-[#71717a] font-medium mb-1.5">Dias Trabalhados</p>
+            <div className="bg-card border border-border rounded-xl p-5">
+              <p className="text-xs text-muted-foreground font-medium mb-1.5">Dias Trabalhados</p>
               <p className="text-xl font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{draft.members.filter((m) => m.days > 0).reduce((s, m) => s + m.days, 0)}</p>
-              <p className="text-xs text-[#a1a1aa] mt-1">dias no total</p>
+              <p className="text-xs text-[var(--tone-subtle)] mt-1">dias no total</p>
             </div>
-            <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-5">
-              <p className="text-xs text-[#71717a] font-medium mb-1.5">Centros de Custo</p>
+            <div className="bg-card border border-border rounded-xl p-5">
+              <p className="text-xs text-muted-foreground font-medium mb-1.5">Centros de Custo</p>
               <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                 {draft.costCenters.map((u) => (
                   <span key={u} className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: UNIT_LIGHT[u], color: UNIT_COLORS[u] }}>{UNIT_NAMES[u]}</span>
@@ -1832,16 +1842,16 @@ function ProjectDetail({ project, collaborators, workingDays, onChange, onDelete
 
           <div className="grid grid-cols-2 gap-6">
             {/* Cost centers */}
-            <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-5 space-y-4">
+            <div className="bg-card border border-border rounded-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold">Centros de Custo</h3>
-              <p className="text-xs text-[#a1a1aa] -mt-2">Selecione a qual unidade este projeto pertence.</p>
+              <p className="text-xs text-[var(--tone-subtle)] -mt-2">Selecione a qual unidade este projeto pertence.</p>
               <div className="space-y-2">
                 {UNITS.map((u) => {
                   const active = draft.costCenters.includes(u);
                   return (
                     <div key={u} className="space-y-2">
-                      <button onClick={() => toggleUnit(u)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all text-left ${active ? "border-transparent" : "border-[rgba(0,0,0,0.07)] hover:border-[rgba(0,0,0,0.14)]"}`} style={active ? { backgroundColor: UNIT_LIGHT[u], borderColor: UNIT_COLORS[u] + "33" } : {}}>
-                        <div className="w-4 h-4 rounded flex items-center justify-center border-2 transition-all shrink-0" style={active ? { backgroundColor: UNIT_COLORS[u], borderColor: UNIT_COLORS[u] } : { borderColor: "#d1d1d6" }}>
+                      <button onClick={() => toggleUnit(u)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all text-left ${active ? "border-transparent" : "border-border hover:border-[var(--border-14)]"}`} style={active ? { backgroundColor: UNIT_LIGHT[u], borderColor: UNIT_COLORS[u] + "33" } : {}}>
+                        <div className="w-4 h-4 rounded flex items-center justify-center border-2 transition-all shrink-0" style={active ? { backgroundColor: UNIT_COLORS[u], borderColor: UNIT_COLORS[u] } : { borderColor: "var(--tone-line)" }}>
                           {active && <Check size={10} className="text-white" strokeWidth={3} />}
                         </div>
                         <div className="flex items-center gap-2 flex-1">
@@ -1852,8 +1862,8 @@ function ProjectDetail({ project, collaborators, workingDays, onChange, onDelete
                       </button>
                       {active && draft.costCenters.length > 1 && (
                         <div className="pl-10 flex items-center gap-2">
-                          <input type="number" min={0} max={100} value={draft.splits[u]} onChange={(e) => update({ ...draft, splits: { ...draft.splits, [u]: Math.max(0, Math.min(100, Number(e.target.value))) } })} className="w-14 h-7 text-center text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" style={{ fontFamily: "var(--font-mono)" }} />
-                          <span className="text-xs text-[#a1a1aa]">%</span>
+                          <input type="number" min={0} max={100} value={draft.splits[u]} onChange={(e) => update({ ...draft, splits: { ...draft.splits, [u]: Math.max(0, Math.min(100, Number(e.target.value))) } })} className="w-14 h-7 text-center text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" style={{ fontFamily: "var(--font-mono)" }} />
+                          <span className="text-xs text-[var(--tone-subtle)]">%</span>
                           {splitsSum !== 100 && <span className="text-[10px] text-amber-500">soma: {splitsSum}%</span>}
                         </div>
                       )}
@@ -1862,12 +1872,12 @@ function ProjectDetail({ project, collaborators, workingDays, onChange, onDelete
                 })}
               </div>
               {draft.costCenters.length > 1 && (
-                <button onClick={() => update({ ...draft, splits: equalSplit(draft.costCenters) })} className="text-xs text-[#71717a] hover:text-[#18181b] transition-colors">Distribuir igualmente</button>
+                <button onClick={() => update({ ...draft, splits: equalSplit(draft.costCenters) })} className="text-xs text-muted-foreground hover:text-foreground transition-colors">Distribuir igualmente</button>
               )}
             </div>
 
             {/* Unit cost breakdown */}
-            <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-5 space-y-4">
+            <div className="bg-card border border-border rounded-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold">Custo por Unidade</h3>
               <div className="space-y-3">
                 {draft.costCenters.map((u) => {
@@ -1879,37 +1889,37 @@ function ProjectDetail({ project, collaborators, workingDays, onChange, onDelete
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: UNIT_COLORS[u] }} />
                           <span className="text-xs font-medium">{UNIT_NAMES[u]}</span>
-                          {draft.costCenters.length > 1 && <span className="text-[10px] text-[#a1a1aa]">{draft.splits[u]}%</span>}
+                          {draft.costCenters.length > 1 && <span className="text-[10px] text-[var(--tone-subtle)]">{draft.splits[u]}%</span>}
                         </div>
                         <span className="text-sm font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)", color: UNIT_COLORS[u] }}>{fmt(uCost)}</span>
                       </div>
-                      <div className="w-full h-1 bg-[#f1f1f3] rounded-full"><div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: UNIT_COLORS[u] }} /></div>
+                      <div className="w-full h-1 bg-muted rounded-full"><div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: UNIT_COLORS[u] }} /></div>
                     </div>
                   );
                 })}
               </div>
-              {total === 0 && <p className="text-xs text-[#c0c0c8] italic pt-2">Adicione colaboradores com dias trabalhados para ver o custo.</p>}
+              {total === 0 && <p className="text-xs text-[var(--tone-faint)] italic pt-2">Adicione colaboradores com dias trabalhados para ver o custo.</p>}
             </div>
           </div>
 
           {/* Collaborators */}
-          <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-[rgba(0,0,0,0.05)] flex items-center justify-between">
+          <div className="bg-card border border-border rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-[var(--border-5)] flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold">Equipe do Projeto</h3>
-                <p className="text-xs text-[#a1a1aa] mt-0.5">Selecione os colaboradores e informe os dias trabalhados</p>
+                <p className="text-xs text-[var(--tone-subtle)] mt-0.5">Selecione os colaboradores e informe os dias trabalhados</p>
               </div>
-              <span className="text-xs text-[#a1a1aa]">{draft.members.filter((m) => m.days > 0).length} ativos</span>
+              <span className="text-xs text-[var(--tone-subtle)]">{draft.members.filter((m) => m.days > 0).length} ativos</span>
             </div>
             <table className="w-full">
               <thead>
-                <tr className="border-b border-[rgba(0,0,0,0.04)]">
-                  <th className="text-left px-5 py-2.5 text-xs font-medium text-[#71717a] w-8" />
-                  <th className="text-left px-5 py-2.5 text-xs font-medium text-[#71717a]">Colaborador</th>
-                  <th className="text-right px-5 py-2.5 text-xs font-medium text-[#71717a]">Valor/Dia</th>
-                  <th className="text-center px-5 py-2.5 text-xs font-medium text-[#71717a]">Dias</th>
-                  <th className="text-right px-5 py-2.5 text-xs font-medium text-[#71717a]">Custo</th>
-                  <th className="text-right px-5 py-2.5 text-xs font-medium text-[#71717a]">%</th>
+                <tr className="border-b border-[var(--border-4)]">
+                  <th className="text-left px-5 py-2.5 text-xs font-medium text-muted-foreground w-8" />
+                  <th className="text-left px-5 py-2.5 text-xs font-medium text-muted-foreground">Colaborador</th>
+                  <th className="text-right px-5 py-2.5 text-xs font-medium text-muted-foreground">Valor/Dia</th>
+                  <th className="text-center px-5 py-2.5 text-xs font-medium text-muted-foreground">Dias</th>
+                  <th className="text-right px-5 py-2.5 text-xs font-medium text-muted-foreground">Custo</th>
+                  <th className="text-right px-5 py-2.5 text-xs font-medium text-muted-foreground">%</th>
                 </tr>
               </thead>
               <tbody>
@@ -1919,34 +1929,34 @@ function ProjectDetail({ project, collaborators, workingDays, onChange, onDelete
                   const rate = dailyRate(c.salary, workingDays);
                   const cost = selected ? member.days * rate : 0;
                   return (
-                    <tr key={c.id} className={`border-b border-[rgba(0,0,0,0.04)] last:border-0 transition-colors ${selected ? "" : "opacity-40"}`}>
+                    <tr key={c.id} className={`border-b border-[var(--border-4)] last:border-0 transition-colors ${selected ? "" : "opacity-40"}`}>
                       <td className="px-5 py-3">
-                        <button onClick={() => toggleMember(c.id)} className="w-4 h-4 rounded border-2 flex items-center justify-center transition-all" style={selected ? { backgroundColor: "#18181b", borderColor: "#18181b" } : { borderColor: "#d1d1d6" }}>
-                          {selected && <Check size={9} className="text-white" strokeWidth={3} />}
+                        <button onClick={() => toggleMember(c.id)} className="w-4 h-4 rounded border-2 flex items-center justify-center transition-all" style={selected ? { backgroundColor: "var(--primary)", borderColor: "var(--primary)" } : { borderColor: "var(--tone-line)" }}>
+                          {selected && <Check size={9} className="text-primary-foreground" strokeWidth={3} />}
                         </button>
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2.5">
                           <Avatar name={c.name} />
-                          <div><p className="text-sm font-medium leading-tight">{c.name}</p><p className="text-[11px] text-[#a1a1aa] leading-tight">{c.role}</p></div>
+                          <div><p className="text-sm font-medium leading-tight">{c.name}</p><p className="text-[11px] text-[var(--tone-subtle)] leading-tight">{c.role}</p></div>
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-right text-xs tabular-nums text-[#a1a1aa]" style={{ fontFamily: "var(--font-mono)" }}>{fmt(rate)}</td>
+                      <td className="px-5 py-3 text-right text-xs tabular-nums text-[var(--tone-subtle)]" style={{ fontFamily: "var(--font-mono)" }}>{fmt(rate)}</td>
                       <td className="px-5 py-3 text-center">
                         {selected ? (
-                          <input type="number" min={0} step={1} value={member.days} onChange={(e) => setMemberDays(c.id, Number(e.target.value))} onBlur={(e) => setMemberDays(c.id, Math.round(Number(e.target.value)))} className="w-14 h-7 text-center text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" style={{ fontFamily: "var(--font-mono)" }} />
-                        ) : <span className="text-xs text-[#d1d1d6]">—</span>}
+                          <input type="number" min={0} step={1} value={member.days} onChange={(e) => setMemberDays(c.id, Number(e.target.value))} onBlur={(e) => setMemberDays(c.id, Math.round(Number(e.target.value)))} className="w-14 h-7 text-center text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" style={{ fontFamily: "var(--font-mono)" }} />
+                        ) : <span className="text-xs text-[var(--tone-line)]">—</span>}
                       </td>
-                      <td className="px-5 py-3 text-right text-sm tabular-nums font-medium" style={{ fontFamily: "var(--font-mono)" }}>{selected && cost > 0 ? fmt(cost) : <span className="text-[#d1d1d6] text-xs">—</span>}</td>
-                      <td className="px-5 py-3 text-right text-xs tabular-nums text-[#a1a1aa]" style={{ fontFamily: "var(--font-mono)" }}>{selected && total > 0 ? `${((cost / total) * 100).toFixed(1)}%` : <span className="text-[#d1d1d6]">—</span>}</td>
+                      <td className="px-5 py-3 text-right text-sm tabular-nums font-medium" style={{ fontFamily: "var(--font-mono)" }}>{selected && cost > 0 ? fmt(cost) : <span className="text-[var(--tone-line)] text-xs">—</span>}</td>
+                      <td className="px-5 py-3 text-right text-xs tabular-nums text-[var(--tone-subtle)]" style={{ fontFamily: "var(--font-mono)" }}>{selected && total > 0 ? `${((cost / total) * 100).toFixed(1)}%` : <span className="text-[var(--tone-line)]">—</span>}</td>
                     </tr>
                   );
                 })}
               </tbody>
               {total > 0 && (
                 <tfoot>
-                  <tr className="bg-[#f7f7f8] border-t border-[rgba(0,0,0,0.06)]">
-                    <td colSpan={3} className="px-5 py-2.5 text-xs font-semibold text-[#71717a]">Total</td>
+                  <tr className="bg-background border-t border-border">
+                    <td colSpan={3} className="px-5 py-2.5 text-xs font-semibold text-muted-foreground">Total</td>
                     <td className="px-5 py-2.5 text-center text-xs font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{draft.members.filter((m) => m.days > 0).reduce((s, m) => s + m.days, 0)}</td>
                     <td className="px-5 py-2.5 text-right text-sm font-bold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmt(total)}</td>
                     <td className="px-5 py-2.5 text-right text-xs font-semibold" style={{ fontFamily: "var(--font-mono)" }}>100%</td>
@@ -2015,33 +2025,33 @@ function ProjectsView({ projects, setProjects, collaborators, workingDays, defau
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Projetos</h1>
-            <p className="text-xs text-[#71717a] mt-0.5">Calculadora de custos de projeto · {filterYear}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Calculadora de custos de projeto · {filterYear}</p>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
-              <select value={filterMonth === "all" ? "all" : filterMonth} onChange={(e) => setFilterMonth(e.target.value === "all" ? "all" : Number(e.target.value))} className="appearance-none h-8 pl-3 pr-8 text-sm bg-white border border-[rgba(0,0,0,0.07)] rounded-lg outline-none hover:border-[rgba(0,0,0,0.14)] transition-all cursor-pointer">
+              <select value={filterMonth === "all" ? "all" : filterMonth} onChange={(e) => setFilterMonth(e.target.value === "all" ? "all" : Number(e.target.value))} className="appearance-none h-8 pl-3 pr-8 text-sm bg-card border border-border rounded-lg outline-none hover:border-[var(--border-14)] transition-all cursor-pointer">
                 <option value="all">Todos os meses</option>
                 {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
               </select>
-              <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#a1a1aa] pointer-events-none" />
+              <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--tone-subtle)] pointer-events-none" />
             </div>
-            <button onClick={newProject} className="h-8 px-4 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] transition-all flex items-center gap-1.5"><Plus size={14} />Novo Projeto</button>
+            <button onClick={newProject} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all flex items-center gap-1.5"><Plus size={14} />Novo Projeto</button>
           </div>
         </div>
 
         {filtered.length > 0 && (
           <div className="flex items-center gap-6 text-xs">
-            <span className="text-[#71717a]"><span className="font-medium text-[#18181b]">{filtered.length}</span> projetos</span>
-            <span className="text-[#71717a]">Custo total: <span className="font-medium text-[#18181b]" style={{ fontFamily: "var(--font-mono)" }}>{fmt(totalCost)}</span></span>
+            <span className="text-muted-foreground"><span className="font-medium text-foreground">{filtered.length}</span> projetos</span>
+            <span className="text-muted-foreground">Custo total: <span className="font-medium text-foreground" style={{ fontFamily: "var(--font-mono)" }}>{fmt(totalCost)}</span></span>
           </div>
         )}
 
         {filtered.length === 0 ? (
-          <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-16 flex flex-col items-center justify-center text-center">
-            <div className="w-10 h-10 bg-[#f1f1f3] rounded-xl flex items-center justify-center mb-3"><FileSpreadsheet size={18} className="text-[#a1a1aa]" /></div>
+          <div className="bg-card border border-border rounded-xl p-16 flex flex-col items-center justify-center text-center">
+            <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center mb-3"><FileSpreadsheet size={18} className="text-[var(--tone-subtle)]" /></div>
             <p className="text-sm font-medium">{projects.length === 0 ? "Nenhum projeto ainda" : "Nenhum projeto neste período"}</p>
-            <p className="text-xs text-[#a1a1aa] mt-1 mb-4">Crie um projeto para estimar custos por colaborador e centro de custo</p>
-            <button onClick={newProject} className="h-8 px-4 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] transition-all">Criar projeto</button>
+            <p className="text-xs text-[var(--tone-subtle)] mt-1 mb-4">Crie um projeto para estimar custos por colaborador e centro de custo</p>
+            <button onClick={newProject} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all">Criar projeto</button>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4">
@@ -2050,35 +2060,35 @@ function ProjectsView({ projects, setProjects, collaborators, workingDays, defau
               const memberCount = p.members.filter((m) => m.days > 0).length;
               const totalDays = p.members.reduce((s, m) => s + m.days, 0);
               return (
-                <button key={p.id} onClick={() => setSelectedId(p.id)} className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-5 text-left hover:border-[rgba(0,0,0,0.14)] hover:shadow-sm transition-all">
+                <button key={p.id} onClick={() => setSelectedId(p.id)} className="bg-card border border-border rounded-xl p-5 text-left hover:border-[var(--border-14)] hover:shadow-sm transition-all">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold truncate">{p.name}</p>
-                        <span className="text-[10px] text-[#a1a1aa] shrink-0">{MONTHS[p.month]}</span>
+                        <span className="text-[10px] text-[var(--tone-subtle)] shrink-0">{MONTHS[p.month]}</span>
                       </div>
-                      {p.description && <p className="text-xs text-[#a1a1aa] mt-0.5 truncate">{p.description}</p>}
-                      {p.requester && <p className="text-[10px] text-[#a1a1aa] mt-0.5">Solicitante: {p.requester}</p>}
+                      {p.description && <p className="text-xs text-[var(--tone-subtle)] mt-0.5 truncate">{p.description}</p>}
+                      {p.requester && <p className="text-[10px] text-[var(--tone-subtle)] mt-0.5">Solicitante: {p.requester}</p>}
                     </div>
                     <div className="flex items-center gap-1 ml-2 shrink-0">
                       {p.costCenters.map((u) => <div key={u} className="w-2 h-2 rounded-full" style={{ backgroundColor: UNIT_COLORS[u] }} />)}
                     </div>
                   </div>
                   {(p.startDate || p.endDate) && (
-                    <div className="flex items-center gap-1 text-[10px] text-[#a1a1aa] mb-2">
+                    <div className="flex items-center gap-1 text-[10px] text-[var(--tone-subtle)] mb-2">
                       <CalendarDays size={10} />
                       <span>{p.startDate ? fmtDate(p.startDate) : "?"} → {p.endDate ? fmtDate(p.endDate) : "?"}</span>
                     </div>
                   )}
                   <div className="flex items-end justify-between">
                     <div className="space-y-1.5">
-                      <p className="text-[10px] text-[#a1a1aa]">{memberCount} colaboradores · {totalDays} dias</p>
+                      <p className="text-[10px] text-[var(--tone-subtle)]">{memberCount} colaboradores · {totalDays} dias</p>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {p.costCenters.map((u) => <span key={u} className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: UNIT_LIGHT[u], color: UNIT_COLORS[u] }}>{UNIT_NAMES[u]}{p.costCenters.length > 1 ? ` ${p.splits[u]}%` : ""}</span>)}
                       </div>
                     </div>
                     <p className="text-base font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>
-                      {cost > 0 ? fmt(cost) : <span className="text-[#d1d1d6] text-sm">—</span>}
+                      {cost > 0 ? fmt(cost) : <span className="text-[var(--tone-line)] text-sm">—</span>}
                     </p>
                   </div>
                 </button>
@@ -2110,9 +2120,9 @@ function ColaboradoresView({ collaborators, setCollaborators, workingDays }: Col
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Colaboradores</h1>
-            <p className="text-xs text-[#71717a] mt-0.5">{collaborators.length} pessoas · Folha total {fmt(totalFolha)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{collaborators.length} pessoas · Folha total {fmt(totalFolha)}</p>
           </div>
-          <button onClick={() => setAdding(true)} className="h-8 px-4 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] transition-all flex items-center gap-1.5"><Plus size={14} />Novo Colaborador</button>
+          <button onClick={() => setAdding(true)} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all flex items-center gap-1.5"><Plus size={14} />Novo Colaborador</button>
         </div>
         {adding && <CollaboratorForm workingDays={workingDays} onSave={(d) => {
           const tempId = String(Date.now());
@@ -2123,35 +2133,35 @@ function ColaboradoresView({ collaborators, setCollaborators, workingDays }: Col
             alert("Não foi possível salvar o colaborador. Tente novamente.");
           });
         }} onCancel={() => setAdding(false)} />}
-        <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl overflow-hidden">
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-[rgba(0,0,0,0.06)]">
-                <th className="text-left px-5 py-3 text-xs font-medium text-[#71717a]">Nome</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-[#71717a]">Cargo</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-[#71717a]">Aniversário</th>
-                <th className="text-right px-5 py-3 text-xs font-medium text-[#71717a]">Salário</th>
-                <th className="text-right px-5 py-3 text-xs font-medium text-[#71717a]">Valor/Dia</th>
+              <tr className="border-b border-border">
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Nome</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Cargo</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Aniversário</th>
+                <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground">Salário</th>
+                <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground">Valor/Dia</th>
                 <th className="px-5 py-3 w-20" />
               </tr>
             </thead>
             <tbody>
               {collaborators.map((c) => (
                 <>
-                  <tr key={c.id} className="border-b border-[rgba(0,0,0,0.04)] last:border-0 group">
+                  <tr key={c.id} className="border-b border-[var(--border-4)] last:border-0 group">
                     <td className="px-5 py-3"><div className="flex items-center gap-2.5"><Avatar name={c.name} /><span className="text-sm font-medium">{c.name}</span></div></td>
-                    <td className="px-5 py-3 text-sm text-[#71717a]">{c.role}</td>
-                    <td className="px-5 py-3 text-xs text-[#71717a]" style={{ fontFamily: "var(--font-mono)" }}>{c.birthDate ? fmtDate(c.birthDate) : "—"}</td>
+                    <td className="px-5 py-3 text-sm text-muted-foreground">{c.role}</td>
+                    <td className="px-5 py-3 text-xs text-muted-foreground" style={{ fontFamily: "var(--font-mono)" }}>{c.birthDate ? fmtDate(c.birthDate) : "—"}</td>
                     <td className="px-5 py-3 text-right text-sm tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmt(c.salary)}</td>
-                    <td className="px-5 py-3 text-right text-xs tabular-nums text-[#a1a1aa]" style={{ fontFamily: "var(--font-mono)" }}>{fmt(dailyRate(c.salary, workingDays))}</td>
+                    <td className="px-5 py-3 text-right text-xs tabular-nums text-[var(--tone-subtle)]" style={{ fontFamily: "var(--font-mono)" }}>{fmt(dailyRate(c.salary, workingDays))}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
-                        <button onClick={() => setEditId(c.id)} className="w-6 h-6 rounded-md flex items-center justify-center text-[#a1a1aa] hover:text-[#18181b] hover:bg-[#f4f4f6] transition-all"><Pencil size={12} /></button>
+                        <button onClick={() => setEditId(c.id)} className="w-6 h-6 rounded-md flex items-center justify-center text-[var(--tone-subtle)] hover:text-foreground hover:bg-input-background transition-all"><Pencil size={12} /></button>
                         <button onClick={() => {
                           if (!confirm(`Remover ${c.name}? Isso também apaga o acesso de login vinculado, se existir.`)) return;
                           setCollaborators((p) => p.filter((x) => x.id !== c.id));
                           apiDelete(`/collaborators/${c.id}`).catch(() => { alert("Não foi possível remover. Atualize a página."); });
-                        }} className="w-6 h-6 rounded-md flex items-center justify-center text-[#a1a1aa] hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={12} /></button>
+                        }} className="w-6 h-6 rounded-md flex items-center justify-center text-[var(--tone-subtle)] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/15 transition-all"><Trash2 size={12} /></button>
                       </div>
                     </td>
                   </tr>
@@ -2204,25 +2214,25 @@ function DashboardView({ collaborators, releases, projects, workingDays, role, c
             <Avatar name={c.name} size={10} />
             <div>
               <h1 className="text-xl font-semibold tracking-tight">Olá, {c.name.split(" ")[0]}</h1>
-              <p className="text-xs text-[#71717a]">{c.role}</p>
+              <p className="text-xs text-muted-foreground">{c.role}</p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-5">
-              <p className="text-xs text-[#71717a] font-medium mb-1.5">Períodos Abertos</p>
+            <div className="bg-card border border-border rounded-xl p-5">
+              <p className="text-xs text-muted-foreground font-medium mb-1.5">Períodos Abertos</p>
               <p className="text-2xl font-semibold" style={{ fontFamily: "var(--font-mono)" }}>{openReleases.length}</p>
-              <p className="text-xs text-[#a1a1aa] mt-1">aguardando preenchimento</p>
+              <p className="text-xs text-[var(--tone-subtle)] mt-1">aguardando preenchimento</p>
             </div>
-            <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-5">
-              <p className="text-xs text-[#71717a] font-medium mb-1.5">Períodos Aprovados</p>
+            <div className="bg-card border border-border rounded-xl p-5">
+              <p className="text-xs text-muted-foreground font-medium mb-1.5">Períodos Aprovados</p>
               <p className="text-2xl font-semibold" style={{ fontFamily: "var(--font-mono)" }}>{approvedReleases.length}</p>
-              <p className="text-xs text-[#a1a1aa] mt-1">este ano</p>
+              <p className="text-xs text-[var(--tone-subtle)] mt-1">este ano</p>
             </div>
           </div>
           {openReleases.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-[#71717a] uppercase tracking-wider mb-3">Pendente</p>
-              <button onClick={() => onNav("rateio")} className="w-full bg-blue-50 border border-blue-100 rounded-xl px-5 py-4 text-left hover:bg-blue-100/60 transition-all flex items-center justify-between">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Pendente</p>
+              <button onClick={() => onNav("rateio")} className="w-full bg-blue-50 dark:bg-blue-500/15 border border-blue-100 dark:border-blue-500/20 rounded-xl px-5 py-4 text-left hover:bg-blue-100 dark:hover:bg-blue-500/25/60 transition-all flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold text-blue-800">{openReleases.map((r) => `${MONTHS[r.month]} ${r.year}`).join(", ")}</p>
                   <p className="text-xs text-blue-600 mt-0.5">Clique para preencher seu rateio</p>
@@ -2252,7 +2262,7 @@ function DashboardView({ collaborators, releases, projects, workingDays, role, c
       <div className="max-w-5xl mx-auto px-8 py-8 space-y-8">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-xs text-[#71717a] mt-1">{now.toLocaleDateString("pt-BR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
+          <p className="text-xs text-muted-foreground mt-1">{now.toLocaleDateString("pt-BR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
         </div>
         <div className="grid grid-cols-4 gap-4">
           {[
@@ -2261,22 +2271,22 @@ function DashboardView({ collaborators, releases, projects, workingDays, role, c
             { label: "Períodos Aprovados", value: String(approvedReleases.length), sub: "este ano" },
             { label: "Projetos", value: String(projects.length), sub: "cadastrados" },
           ].map((card) => (
-            <div key={card.label} className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-5">
-              <p className="text-xs text-[#71717a] font-medium mb-2">{card.label}</p>
+            <div key={card.label} className="bg-card border border-border rounded-xl p-5">
+              <p className="text-xs text-muted-foreground font-medium mb-2">{card.label}</p>
               <p className="text-xl font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{card.value}</p>
-              <p className="text-xs text-[#a1a1aa] mt-1">{card.sub}</p>
+              <p className="text-xs text-[var(--tone-subtle)] mt-1">{card.sub}</p>
             </div>
           ))}
         </div>
         <div className="grid grid-cols-2 gap-6">
-          <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-6">
+          <div className="bg-card border border-border rounded-xl p-6">
             <h3 className="text-sm font-semibold mb-4">Distribuição Acumulada por Unidade</h3>
             {totalRateado > 0 ? (
               <div className="flex items-center gap-6">
                 <div style={{ width: 160, height: 160 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={48} outerRadius={72} dataKey="value" strokeWidth={2} stroke="#f7f7f8">
+                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={48} outerRadius={72} dataKey="value" strokeWidth={2} stroke="var(--background)">
                         {pieData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
                       </Pie>
                       <Tooltip formatter={(v: number) => [fmt(v), ""]} contentStyle={{ border: "1px solid rgba(0,0,0,0.07)", borderRadius: 8, fontSize: 12 }} />
@@ -2287,19 +2297,19 @@ function DashboardView({ collaborators, releases, projects, workingDays, role, c
                   {pieData.map((d) => (
                     <div key={d.name}>
                       <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }} /><span className="text-xs text-[#71717a]">{d.name}</span></div>
+                        <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }} /><span className="text-xs text-muted-foreground">{d.name}</span></div>
                         <span className="text-xs font-medium tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmt(d.value)}</span>
                       </div>
-                      <div className="w-full h-1 bg-[#f1f1f3] rounded-full"><div className="h-full rounded-full" style={{ width: `${(d.value / totalRateado) * 100}%`, backgroundColor: d.color }} /></div>
+                      <div className="w-full h-1 bg-muted rounded-full"><div className="h-full rounded-full" style={{ width: `${(d.value / totalRateado) * 100}%`, backgroundColor: d.color }} /></div>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-40 text-sm text-[#a1a1aa]">Nenhum rateio lançado ainda</div>
+              <div className="flex items-center justify-center h-40 text-sm text-[var(--tone-subtle)]">Nenhum rateio lançado ainda</div>
             )}
           </div>
-          <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-6">
+          <div className="bg-card border border-border rounded-xl p-6">
             <h3 className="text-sm font-semibold mb-4">Períodos Recentes</h3>
             <div className="space-y-2">
               {[...releases].reverse().slice(0, 5).map((r) => {
@@ -2310,11 +2320,11 @@ function DashboardView({ collaborators, releases, projects, workingDays, role, c
                       <div className={`w-1.5 h-1.5 rounded-full ${r.status === "approved" ? "bg-emerald-500" : "bg-blue-400"}`} />
                       <span className="text-sm">{MONTHS[r.month]} {r.year}</span>
                     </div>
-                    <span className="text-xs text-[#a1a1aa]">{done}/{r.entries.length} completos</span>
+                    <span className="text-xs text-[var(--tone-subtle)]">{done}/{r.entries.length} completos</span>
                   </div>
                 );
               })}
-              {releases.length === 0 && <p className="text-sm text-[#a1a1aa]">Nenhum período liberado ainda</p>}
+              {releases.length === 0 && <p className="text-sm text-[var(--tone-subtle)]">Nenhum período liberado ainda</p>}
             </div>
           </div>
         </div>
@@ -2329,14 +2339,14 @@ function SettingsView({ workingDays, setWorkingDays }: { workingDays: number; se
   return (
     <div className="flex-1 overflow-auto">
       <div className="max-w-xl mx-auto px-8 py-8 space-y-6">
-        <div><h1 className="text-xl font-semibold tracking-tight">Configurações</h1><p className="text-xs text-[#71717a] mt-0.5">Parâmetros globais do sistema</p></div>
-        <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl divide-y divide-[rgba(0,0,0,0.05)]">
+        <div><h1 className="text-xl font-semibold tracking-tight">Configurações</h1><p className="text-xs text-muted-foreground mt-0.5">Parâmetros globais do sistema</p></div>
+        <div className="bg-card border border-border rounded-xl divide-y divide-[rgba(0,0,0,0.05)]">
           <div className="px-5 py-4 flex items-center justify-between">
-            <div><p className="text-sm font-medium">Dias Úteis Padrão</p><p className="text-xs text-[#a1a1aa] mt-0.5">Referência para cálculo do valor diário dos colaboradores</p></div>
-            <input type="number" value={workingDays} onChange={(e) => setWorkingDays(Math.max(1, Number(e.target.value)))} className="w-16 h-8 text-center text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" style={{ fontFamily: "var(--font-mono)" }} min={1} max={31} />
+            <div><p className="text-sm font-medium">Dias Úteis Padrão</p><p className="text-xs text-[var(--tone-subtle)] mt-0.5">Referência para cálculo do valor diário dos colaboradores</p></div>
+            <input type="number" value={workingDays} onChange={(e) => setWorkingDays(Math.max(1, Number(e.target.value)))} className="w-16 h-8 text-center text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" style={{ fontFamily: "var(--font-mono)" }} min={1} max={31} />
           </div>
           <div className="px-5 py-4 flex items-center justify-between">
-            <div><p className="text-sm font-medium">Centros de Custo</p><p className="text-xs text-[#a1a1aa] mt-0.5">Wolf Consórcios · Fraga & Bitello · Woncred · Profit</p></div>
+            <div><p className="text-sm font-medium">Centros de Custo</p><p className="text-xs text-[var(--tone-subtle)] mt-0.5">Wolf Consórcios · Fraga & Bitello · Woncred · Profit</p></div>
             <div className="flex items-center gap-1.5">
               {UNITS.map((u) => <div key={u} className="w-2 h-2 rounded-full" style={{ backgroundColor: UNIT_COLORS[u] }} />)}
             </div>
@@ -2358,17 +2368,71 @@ interface AuthUser {
   mustChangePassword: boolean;
 }
 
+// ─── Modo noturno ───────────────────────────────────────────────────────────
+// Preferência salva por usuário (chave inclui o id) — cada login "lembra" o
+// próprio ajuste. Antes do login (ou sem usuário identificado ainda), usa uma
+// preferência "convidado" à parte.
+
+const NIGHT_MODE_KEY_PREFIX = "rateio_night_mode_";
+
+function nightModeKey(userId: number | null): string {
+  return `${NIGHT_MODE_KEY_PREFIX}${userId ?? "guest"}`;
+}
+
+function readStoredNightMode(userId: number | null): boolean {
+  try {
+    const stored = localStorage.getItem(nightModeKey(userId));
+    if (stored === "dark") return true;
+    if (stored === "light") return false;
+  } catch {
+    // localStorage indisponível (modo privado, etc.) — cai no padrão abaixo.
+  }
+  return typeof window !== "undefined" && !!window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+}
+
+function writeStoredNightMode(userId: number | null, dark: boolean) {
+  try {
+    localStorage.setItem(nightModeKey(userId), dark ? "dark" : "light");
+  } catch {
+    // sem persistência disponível — a preferência só vale pra sessão atual.
+  }
+}
+
+// Aplica/lê a preferência de modo noturno do usuário atual (ou "convidado",
+// nas telas de login/setup) e mantém a classe "dark" no <html> sincronizada.
+function useNightMode(userId: number | null): [boolean, () => void] {
+  const [dark, setDark] = useState(() => readStoredNightMode(userId));
+
+  useEffect(() => {
+    setDark(readStoredNightMode(userId));
+  }, [userId]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+  }, [dark]);
+
+  const toggle = useCallback(() => {
+    setDark((prev) => {
+      const next = !prev;
+      writeStoredNightMode(userId, next);
+      return next;
+    });
+  }, [userId]);
+
+  return [dark, toggle];
+}
+
 function AuthShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f7f7f8]" style={{ fontFamily: "var(--font-family)" }}>
-      <div className="w-full max-w-sm bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-6 space-y-5">
+    <div className="min-h-screen flex items-center justify-center bg-background" style={{ fontFamily: "var(--font-family)" }}>
+      <div className="w-full max-w-sm bg-card border border-border rounded-xl p-6 space-y-5">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 bg-[#18181b] rounded-md flex items-center justify-center"><Zap size={14} className="text-white" /></div>
           <span className="text-sm font-semibold tracking-tight">Rateio TI</span>
         </div>
         <div>
           <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
-          <p className="text-xs text-[#71717a] mt-0.5">{subtitle}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
         </div>
         {children}
       </div>
@@ -2399,23 +2463,23 @@ function ChangePasswordForm({ onDone, onCancel }: { onDone: () => void; onCancel
   return (
     <div className="space-y-3">
       <div>
-        <label className="block text-xs font-medium text-[#71717a] mb-1.5">Senha atual</label>
-        <input type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" autoFocus />
+        <label className="block text-xs font-medium text-muted-foreground mb-1.5">Senha atual</label>
+        <input type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" autoFocus />
       </div>
       <div>
-        <label className="block text-xs font-medium text-[#71717a] mb-1.5">Nova senha</label>
-        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" />
+        <label className="block text-xs font-medium text-muted-foreground mb-1.5">Nova senha</label>
+        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" />
       </div>
       <div>
-        <label className="block text-xs font-medium text-[#71717a] mb-1.5">Confirmar nova senha</label>
-        <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" />
+        <label className="block text-xs font-medium text-muted-foreground mb-1.5">Confirmar nova senha</label>
+        <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" />
       </div>
       {error && <p className="text-xs text-red-500">{error}</p>}
       <div className="flex items-center gap-2 pt-1">
         {onCancel && (
-          <button onClick={onCancel} className="flex-1 h-9 text-sm text-[#71717a] hover:text-[#18181b] rounded-lg hover:bg-[#f4f4f6] transition-all">Cancelar</button>
+          <button onClick={onCancel} className="flex-1 h-9 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-input-background transition-all">Cancelar</button>
         )}
-        <button onClick={submit} disabled={loading} className="flex-1 h-9 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] disabled:opacity-50 transition-all">
+        <button onClick={submit} disabled={loading} className="flex-1 h-9 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-all">
           {loading ? "Salvando…" : "Salvar nova senha"}
         </button>
       </div>
@@ -2456,19 +2520,19 @@ function Setup({ onDone }: { onDone: () => void }) {
     <AuthShell title="Configuração inicial" subtitle="Crie a conta do primeiro administrador para começar a usar o sistema. Nenhum funcionário vem pré-cadastrado.">
       <div className="space-y-3">
         <div>
-          <label className="block text-xs font-medium text-[#71717a] mb-1.5">Usuário</label>
-          <input value={username} onChange={(e) => setUsername(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" autoFocus />
+          <label className="block text-xs font-medium text-muted-foreground mb-1.5">Usuário</label>
+          <input value={username} onChange={(e) => setUsername(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" autoFocus />
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#71717a] mb-1.5">Senha</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" />
+          <label className="block text-xs font-medium text-muted-foreground mb-1.5">Senha</label>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" />
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#71717a] mb-1.5">Confirmar senha</label>
-          <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" />
+          <label className="block text-xs font-medium text-muted-foreground mb-1.5">Confirmar senha</label>
+          <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" />
         </div>
         {error && <p className="text-xs text-red-500">{error}</p>}
-        <button onClick={submit} disabled={loading} className="w-full h-9 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] disabled:opacity-50 transition-all">{loading ? "Criando…" : "Criar administrador"}</button>
+        <button onClick={submit} disabled={loading} className="w-full h-9 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-all">{loading ? "Criando…" : "Criar administrador"}</button>
       </div>
     </AuthShell>
   );
@@ -2493,15 +2557,15 @@ function Login({ onDone }: { onDone: () => void }) {
     <AuthShell title="Entrar" subtitle="Acesse o sistema de rateio de horas">
       <div className="space-y-3">
         <div>
-          <label className="block text-xs font-medium text-[#71717a] mb-1.5">Usuário</label>
-          <input value={username} onChange={(e) => setUsername(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" autoFocus />
+          <label className="block text-xs font-medium text-muted-foreground mb-1.5">Usuário</label>
+          <input value={username} onChange={(e) => setUsername(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" autoFocus />
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#71717a] mb-1.5">Senha</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none focus:border-[#18181b] focus:bg-white transition-all" />
+          <label className="block text-xs font-medium text-muted-foreground mb-1.5">Senha</label>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} className="w-full h-9 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" />
         </div>
         {error && <p className="text-xs text-red-500">{error}</p>}
-        <button onClick={submit} disabled={loading} className="w-full h-9 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] disabled:opacity-50 transition-all">{loading ? "Entrando…" : "Entrar"}</button>
+        <button onClick={submit} disabled={loading} className="w-full h-9 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-all">{loading ? "Entrando…" : "Entrar"}</button>
       </div>
     </AuthShell>
   );
@@ -2579,76 +2643,76 @@ function AcessosView({ collaborators, currentUserId }: AcessosViewProps) {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Acessos</h1>
-            <p className="text-xs text-[#71717a] mt-0.5">Contas de login para administradores e colaboradores</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Contas de login para administradores e colaboradores</p>
           </div>
-          <button onClick={() => setCreating(true)} className="h-8 px-4 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] transition-all flex items-center gap-1.5"><Plus size={14} />Novo Acesso</button>
+          <button onClick={() => setCreating(true)} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all flex items-center gap-1.5"><Plus size={14} />Novo Acesso</button>
         </div>
 
         {creating && (
-          <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-5 space-y-4">
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
             <h3 className="text-sm font-semibold">Novo Acesso</h3>
-            <div className="flex rounded-lg bg-[#f4f4f6] p-0.5 w-fit">
-              <button onClick={() => setNewType("collaborator")} className={`px-3 h-7 rounded-md text-xs font-medium transition-all ${newType === "collaborator" ? "bg-white shadow-sm text-[#18181b]" : "text-[#a1a1aa]"}`}>Colaborador</button>
-              <button onClick={() => setNewType("admin")} className={`px-3 h-7 rounded-md text-xs font-medium transition-all ${newType === "admin" ? "bg-white shadow-sm text-[#18181b]" : "text-[#a1a1aa]"}`}>Administrador</button>
+            <div className="flex rounded-lg bg-input-background p-0.5 w-fit">
+              <button onClick={() => setNewType("collaborator")} className={`px-3 h-7 rounded-md text-xs font-medium transition-all ${newType === "collaborator" ? "bg-card shadow-sm text-foreground" : "text-[var(--tone-subtle)]"}`}>Colaborador</button>
+              <button onClick={() => setNewType("admin")} className={`px-3 h-7 rounded-md text-xs font-medium transition-all ${newType === "admin" ? "bg-card shadow-sm text-foreground" : "text-[var(--tone-subtle)]"}`}>Administrador</button>
             </div>
             {newType === "collaborator" && (
               <div>
-                <label className="block text-xs font-medium text-[#71717a] mb-1.5">Colaborador</label>
-                <select value={newCollaboratorId} onChange={(e) => setNewCollaboratorId(e.target.value)} className="w-full h-8 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none">
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Colaborador</label>
+                <select value={newCollaboratorId} onChange={(e) => setNewCollaboratorId(e.target.value)} className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none">
                   <option value="">Selecione…</option>
                   {withoutLogin.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
-                {withoutLogin.length === 0 && <p className="text-[11px] text-[#a1a1aa] mt-1">Todos os colaboradores já possuem acesso, ou nenhum colaborador foi cadastrado ainda.</p>}
+                {withoutLogin.length === 0 && <p className="text-[11px] text-[var(--tone-subtle)] mt-1">Todos os colaboradores já possuem acesso, ou nenhum colaborador foi cadastrado ainda.</p>}
               </div>
             )}
             <div>
-              <label className="block text-xs font-medium text-[#71717a] mb-1.5">Usuário</label>
-              <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} className="w-full h-8 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none" placeholder="ex: joao.silva" />
+              <label className="block text-xs font-medium text-muted-foreground mb-1.5">Usuário</label>
+              <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none" placeholder="ex: joao.silva" />
             </div>
-            <p className="text-[11px] text-[#a1a1aa]">A senha inicial é sempre <strong className="text-[#71717a]">{DEFAULT_PASSWORD_HINT}</strong> — a pessoa será obrigada a trocá-la no primeiro login.</p>
+            <p className="text-[11px] text-[var(--tone-subtle)]">A senha inicial é sempre <strong className="text-muted-foreground">{DEFAULT_PASSWORD_HINT}</strong> — a pessoa será obrigada a trocá-la no primeiro login.</p>
             {error && <p className="text-xs text-red-500">{error}</p>}
             <div className="flex items-center justify-end gap-2">
-              <button onClick={() => { setCreating(false); setError(""); }} className="h-8 px-4 text-sm text-[#71717a] hover:text-[#18181b] rounded-lg hover:bg-[#f4f4f6] transition-all">Cancelar</button>
-              <button onClick={createAccess} className="h-8 px-4 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] transition-all">Criar acesso</button>
+              <button onClick={() => { setCreating(false); setError(""); }} className="h-8 px-4 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-input-background transition-all">Cancelar</button>
+              <button onClick={createAccess} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all">Criar acesso</button>
             </div>
           </div>
         )}
 
-        <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl overflow-hidden">
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-[rgba(0,0,0,0.06)]">
-                <th className="text-left px-5 py-3 text-xs font-medium text-[#71717a]">Usuário</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-[#71717a]">Tipo</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-[#71717a]">Colaborador vinculado</th>
+              <tr className="border-b border-border">
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Usuário</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Tipo</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Colaborador vinculado</th>
                 <th className="px-5 py-3 w-48" />
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id} className="border-b border-[rgba(0,0,0,0.04)] last:border-0">
+                <tr key={u.id} className="border-b border-[var(--border-4)] last:border-0">
                   <td className="px-5 py-3 text-sm font-medium">
                     {u.username}
                     {u.mustChangePassword && (
-                      <span className="ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 align-middle">senha padrão</span>
+                      <span className="ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/15 text-amber-600 align-middle">senha padrão</span>
                     )}
                   </td>
-                  <td className="px-5 py-3 text-sm text-[#71717a]">{u.role === "admin" ? "Administrador" : "Colaborador"}</td>
-                  <td className="px-5 py-3 text-sm text-[#71717a]">{u.collaboratorName || "—"}</td>
+                  <td className="px-5 py-3 text-sm text-muted-foreground">{u.role === "admin" ? "Administrador" : "Colaborador"}</td>
+                  <td className="px-5 py-3 text-sm text-muted-foreground">{u.collaboratorName || "—"}</td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => resetToDefault(u.id)} disabled={resettingId === u.id} className="h-6 px-2 text-[11px] rounded-md text-[#71717a] hover:text-[#18181b] hover:bg-[#f4f4f6] disabled:opacity-50 transition-all">
+                      <button onClick={() => resetToDefault(u.id)} disabled={resettingId === u.id} className="h-6 px-2 text-[11px] rounded-md text-muted-foreground hover:text-foreground hover:bg-input-background disabled:opacity-50 transition-all">
                         {resettingId === u.id ? "Redefinindo…" : "Redefinir senha"}
                       </button>
                       {u.id !== currentUserId && (
-                        <button onClick={() => removeAccess(u.id)} className="w-6 h-6 rounded-md flex items-center justify-center text-[#a1a1aa] hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={12} /></button>
+                        <button onClick={() => removeAccess(u.id)} className="w-6 h-6 rounded-md flex items-center justify-center text-[var(--tone-subtle)] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/15 transition-all"><Trash2 size={12} /></button>
                       )}
                     </div>
                   </td>
                 </tr>
               ))}
               {!loading && users.length === 0 && (
-                <tr><td colSpan={4} className="px-5 py-8 text-center text-sm text-[#a1a1aa]">Nenhum acesso cadastrado</td></tr>
+                <tr><td colSpan={4} className="px-5 py-8 text-center text-sm text-[var(--tone-subtle)]">Nenhum acesso cadastrado</td></tr>
               )}
             </tbody>
           </table>
@@ -2660,7 +2724,7 @@ function AcessosView({ collaborators, currentUserId }: AcessosViewProps) {
 
 // ─── Main App (autenticado) ───────────────────────────────────────────────────
 
-function MainApp({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
+function MainApp({ user, onLogout, nightMode, onToggleNightMode }: { user: AuthUser; onLogout: () => void; nightMode: boolean; onToggleNightMode: () => void }) {
   const now = new Date();
   // Contas sem colaborador vinculado existem só para o rateio diário pessoal —
   // já abrem direto nessa tela em vez do Dashboard, que não tem nada pra mostrar.
@@ -2708,11 +2772,11 @@ function MainApp({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const currentCollaborator = collaborators.find((c) => c.id === currentCollaboratorId);
 
   if (loadingData) {
-    return <div className="flex h-screen items-center justify-center bg-[#f7f7f8] text-sm text-[#a1a1aa]">Carregando…</div>;
+    return <div className="flex h-screen items-center justify-center bg-background text-sm text-[var(--tone-subtle)]">Carregando…</div>;
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f7f7f8]" style={{ fontFamily: "var(--font-family)" }}>
+    <div className="flex h-screen overflow-hidden bg-background" style={{ fontFamily: "var(--font-family)" }}>
       <Sidebar
         active={view}
         onNav={handleNav}
@@ -2721,14 +2785,16 @@ function MainApp({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
         displaySubtitle={role === "admin" ? "Administrador" : (currentCollaborator?.role ?? "Colaborador")}
         onLogout={onLogout}
         onChangePassword={() => setShowChangePassword(true)}
+        nightMode={nightMode}
+        onToggleNightMode={onToggleNightMode}
       />
 
       {showChangePassword && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-8">
-          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 space-y-4">
+          <div className="w-full max-w-sm bg-card rounded-2xl shadow-2xl p-6 space-y-4">
             <div>
               <h3 className="text-sm font-semibold">Alterar senha</h3>
-              <p className="text-xs text-[#71717a] mt-0.5">Informe sua senha atual e escolha uma nova.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Informe sua senha atual e escolha uma nova.</p>
             </div>
             <ChangePasswordForm
               onCancel={() => setShowChangePassword(false)}
@@ -2812,6 +2878,7 @@ type AuthStatus = "loading" | "needsSetup" | "needsLogin" | "ready";
 export default function App() {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [nightMode, toggleNightMode] = useNightMode(user?.id ?? null);
 
   const loadStatus = useCallback(() => {
     apiGet("/auth/status")
@@ -2831,11 +2898,11 @@ export default function App() {
   };
 
   if (status === "loading") {
-    return <div className="flex h-screen items-center justify-center bg-[#f7f7f8] text-sm text-[#a1a1aa]">Carregando…</div>;
+    return <div className="flex h-screen items-center justify-center bg-background text-sm text-[var(--tone-subtle)]">Carregando…</div>;
   }
   if (status === "needsSetup") return <Setup onDone={loadStatus} />;
   if (status === "needsLogin" || !user) return <Login onDone={loadStatus} />;
   if (user.mustChangePassword) return <ForcePasswordChange onDone={loadStatus} />;
 
-  return <MainApp user={user} onLogout={handleLogout} />;
+  return <MainApp user={user} onLogout={handleLogout} nightMode={nightMode} onToggleNightMode={toggleNightMode} />;
 }
