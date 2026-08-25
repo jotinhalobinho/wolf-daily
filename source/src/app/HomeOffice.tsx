@@ -485,7 +485,17 @@ function HOSupervisorPanel({
                       <option value="dayoff">Day off</option>
                     </select>
                     <button
-                      onClick={() => { if (specialCollaboratorId && specialDate) { onAddSpecialDay(specialCollaboratorId, specialDate, specialType); setSpecialDate(""); } }}
+                      onClick={() => {
+                        if (!specialCollaboratorId || !specialDate) return;
+                        onAddSpecialDay(specialCollaboratorId, specialDate, specialType);
+                        // Limpa tudo (não só a data) — senão o formulário fica com o
+                        // colaborador/tipo antigos selecionados, o botão desabilita
+                        // silenciosamente (falta só a data) e parece que travou depois
+                        // do primeiro registro.
+                        setSpecialCollaboratorId("");
+                        setSpecialDate("");
+                        setSpecialType("ferias");
+                      }}
                       disabled={!specialCollaboratorId || !specialDate}
                       className="h-8 px-3 text-sm font-medium bg-muted rounded-lg hover:bg-input-background disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
                     >
@@ -511,7 +521,11 @@ function HOSupervisorPanel({
                     </select>
                     <input type="date" className="h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary" value={correctionDate} onChange={(e) => setCorrectionDate(e.target.value)} />
                     <button
-                      onClick={() => { onCorrectEntry(correctionCollaboratorId, correctionDate, correctionCurrentlyOn); setCorrectionDate(""); }}
+                      onClick={() => {
+                        onCorrectEntry(correctionCollaboratorId, correctionDate, correctionCurrentlyOn);
+                        setCorrectionCollaboratorId("");
+                        setCorrectionDate("");
+                      }}
                       disabled={!correctionCollaboratorId || !correctionDate}
                       className="h-8 px-3 text-sm font-medium bg-muted rounded-lg hover:bg-input-background disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                     >
