@@ -41,6 +41,14 @@ export default defineConfig({
         target: 'http://localhost:4000',
         changeOrigin: true,
       },
+      // Idem pro WebSocket da Escala de Home Office (ver server/src/ws.js) —
+      // sem isso, em dev o navegador tentaria abrir o socket na própria
+      // porta do Vite (5173), que não tem esse endpoint.
+      '/ws': {
+        target: 'http://localhost:4000',
+        ws: true,
+        changeOrigin: true,
+      },
     },
   },
 })
