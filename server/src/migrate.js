@@ -18,7 +18,90 @@ async function columnExists(table, column) {
   return row.cnt > 0;
 }
 
+async function constraintExists(table, constraintName) {
+  const row = await db.get(
+    `SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_NAME = ?`,
+    [table, constraintName]
+  );
+  return row.cnt > 0;
+}
+
 async function runMigrations() {
+  // Escala de Home Office — tabelas novas (quem já tem o banco criado antes
+  // dessa feature não ganha essas tabelas só rodando mysql_schema.sql de novo).
+  await db.run(`CREATE TABLE IF NOT EXISTS sectors (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    color VARCHAR(7) NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_sector_name UNIQUE (name)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+  await db.run(`CREATE TABLE IF NOT EXISTS ho_periods (
+    id VARCHAR(64) PRIMARY KEY, month INT NOT NULL, year INT NOT NULL,
+    deadline VARCHAR(50) DEFAULT '', status ENUM('open','approved') NOT NULL DEFAULT 'open',
+    approved_at DATETIME NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_ho_period_month_year UNIQUE (month, year)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+  await db.run(`CREATE TABLE IF NOT EXISTS ho_entries (
+    id INT AUTO_INCREMENT PRIMARY KEY, period_id VARCHAR(64) NOT NULL,
+    collaborator_id VARCHAR(64) NOT NULL, date DATE NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_ho_entry UNIQUE (period_id, collaborator_id, date),
+    CONSTRAINT fk_ho_entries_period FOREIGN KEY (period_id) REFERENCES ho_periods(id) ON DELETE CASCADE,
+    CONSTRAINT fk_ho_entries_collaborator FOREIGN KEY (collaborator_id) REFERENCES collaborators(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+  await db.run(`CREATE TABLE IF NOT EXISTS ho_special_days (
+    id INT AUTO_INCREMENT PRIMARY KEY, period_id VARCHAR(64) NOT NULL,
+    collaborator_id VARCHAR(64) NOT NULL, date DATE NOT NULL, type ENUM('ferias','dayoff') NOT NULL,
+    CONSTRAINT uq_ho_special_day UNIQUE (period_id, collaborator_id, date),
+    CONSTRAINT fk_ho_special_period FOREIGN KEY (period_id) REFERENCES ho_periods(id) ON DELETE CASCADE,
+    CONSTRAINT fk_ho_special_collaborator FOREIGN KEY (collaborator_id) REFERENCES collaborators(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+  await db.run(`CREATE TABLE IF NOT EXISTS ho_general_meetings (
+    id INT AUTO_INCREMENT PRIMARY KEY, period_id VARCHAR(64) NOT NULL,
+    date DATE NOT NULL, title VARCHAR(255) DEFAULT '',
+    CONSTRAINT uq_ho_meeting_date UNIQUE (period_id, date),
+    CONSTRAINT fk_ho_meeting_period FOREIGN KEY (period_id) REFERENCES ho_periods(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+  // Escala de Home Office — setor, data de admissão (define a cota semanal
+  // automática) e se o colaborador está ativo (conta pro mínimo presencial
+  // do setor). Ver server/src/homeOfficeRules.js.
+  if (!(await columnExists("collaborators", "sector_id"))) {
+    await db.run("ALTER TABLE collaborators ADD COLUMN sector_id VARCHAR(64) NULL AFTER role");
+    console.log("  [migração] coluna collaborators.sector_id criada.");
+  }
+  if (!(await columnExists("sectors", "color"))) {
+    await db.run("ALTER TABLE sectors ADD COLUMN color VARCHAR(7) NULL AFTER name");
+    console.log("  [migração] coluna sectors.color criada.");
+  }
+  // A cor da tag na Escala de Home Office passou a ser do setor, não mais do
+  // colaborador individualmente — remove a coluna antiga se alguém já tinha
+  // rodado uma versão anterior desta migração.
+  if (await columnExists("collaborators", "color")) {
+    await db.run("ALTER TABLE collaborators DROP COLUMN color");
+    console.log("  [migração] coluna collaborators.color removida (cor agora é do setor).");
+  }
+  if (!(await columnExists("collaborators", "hire_date"))) {
+    await db.run("ALTER TABLE collaborators ADD COLUMN hire_date DATE NULL AFTER sector_id");
+    console.log("  [migração] coluna collaborators.hire_date criada.");
+  }
+  if (!(await columnExists("collaborators", "active"))) {
+    await db.run("ALTER TABLE collaborators ADD COLUMN active TINYINT(1) NOT NULL DEFAULT 1 AFTER hire_date");
+    console.log("  [migração] coluna collaborators.active criada.");
+  }
+  if (!(await constraintExists("collaborators", "fk_collaborators_sector"))) {
+    await db.run(
+      "ALTER TABLE collaborators ADD CONSTRAINT fk_collaborators_sector FOREIGN KEY (sector_id) REFERENCES sectors(id) ON DELETE SET NULL"
+    );
+    console.log("  [migração] FK collaborators.sector_id -> sectors criada.");
+  }
+
   // Data de aniversário do colaborador (opcional) — usada pra descontar 1 dia
   // (day off) do rateio mensal no mês em que ela cai.
   if (!(await columnExists("collaborators", "birth_date"))) {
