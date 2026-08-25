@@ -220,9 +220,10 @@ interface HODayColumnProps {
   canSelfToggle: boolean;
   pendingSelf: boolean;
   onToggleSelf: () => void;
-  teammatesOnHO: number;
-  sectorCapacityLabel?: string;
-  sectorCapacityFull?: boolean;
+  // Só preenchido quando o setor relevante (o filtrado, ou o do próprio
+  // usuário) está de fato sem vagas nesse dia — é a única situação em que o
+  // ícone de aviso aparece (adversidade real, não ocupação qualquer).
+  sectorFullWarning?: string;
 }
 
 function HODayColumn({
@@ -239,9 +240,7 @@ function HODayColumn({
   canSelfToggle,
   pendingSelf,
   onToggleSelf,
-  teammatesOnHO,
-  sectorCapacityLabel,
-  sectorCapacityFull,
+  sectorFullWarning,
 }: HODayColumnProps) {
   const showAddSelf = canSelfToggle && !selfOn && !selfBlockedReason;
 
@@ -260,18 +259,10 @@ function HODayColumn({
           </div>
         ) : (
           <>
-            {(sectorCapacityLabel || teammatesOnHO > 0) && (
-              <div className="flex items-center gap-1 text-[10px] text-[var(--tone-subtle)] mb-1">
-                <Info
-                  size={11}
-                  className={sectorCapacityFull ? "text-red-500" : ""}
-                  title={
-                    teammatesOnHO > 0
-                      ? `${teammatesOnHO} ${teammatesOnHO === 1 ? "pessoa" : "pessoas"} do seu time já ${teammatesOnHO === 1 ? "está" : "estão"} de home office neste dia`
-                      : "Vagas de home office restantes no setor filtrado"
-                  }
-                />
-                <span className={sectorCapacityFull ? "text-red-500 font-medium" : ""}>{sectorCapacityLabel}</span>
+            {sectorFullWarning && (
+              <div className="flex items-center gap-1 text-[10px] text-red-500 font-medium mb-1">
+                <Info size={11} className="shrink-0" title={sectorFullWarning} />
+                <span className="truncate">Sem vagas</span>
               </div>
             )}
             {hoEntries.map((c) => (
@@ -780,21 +771,19 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
     const selfBlockedReason = ownSpecial ? (ownSpecial === "ferias" ? "Férias" : "Day off") : meeting ? "Reunião Geral" : undefined;
     const canSelfToggle = !!period && period.status === "open" && !!currentCollaboratorId && !selfBlockedReason;
 
-    const teammatesOnHO =
-      viewerSectorId && !meeting
-        ? roster.filter(
-            (c) => c.active && c.sectorId === viewerSectorId && c.id !== currentCollaboratorId && entriesByCollaborator.get(c.id)?.has(date)
-          ).length
-        : 0;
-
-    let sectorCapacityLabel: string | undefined;
-    let sectorCapacityFull = false;
-    if (sectorFilter !== "all" && !meeting) {
-      const activeCount = activeMembersBySector.get(sectorFilter)?.length ?? 0;
+    // Só mostra o aviso quando o setor relevante (o filtrado, ou — sem
+    // filtro — o do próprio usuário) está de fato sem vagas nesse dia. Nada
+    // de aviso em dia com vaga sobrando, mesmo que já tenha gente de HO.
+    const relevantSectorId = sectorFilter !== "all" ? sectorFilter : viewerSectorId;
+    let sectorFullWarning: string | undefined;
+    if (relevantSectorId && !meeting) {
+      const activeCount = activeMembersBySector.get(relevantSectorId)?.length ?? 0;
       const max = sectorMaxHO(activeCount);
-      const used = sectorUsageByDate.get(`${sectorFilter}|${date}`) ?? 0;
-      sectorCapacityLabel = `${used}/${max} vagas`;
-      sectorCapacityFull = used >= max;
+      const used = sectorUsageByDate.get(`${relevantSectorId}|${date}`) ?? 0;
+      if (activeCount > 0 && used >= max) {
+        const sectorName = sectors.find((s) => s.id === relevantSectorId)?.name;
+        sectorFullWarning = `Setor${sectorName ? ` ${sectorName}` : ""} sem vagas de home office neste dia (${used}/${max})`;
+      }
     }
 
     return (
@@ -816,9 +805,7 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
           const self = collaboratorsById.get(currentCollaboratorId);
           if (self) toggleEntry(self, date, selfOn);
         }}
-        teammatesOnHO={teammatesOnHO}
-        sectorCapacityLabel={sectorCapacityLabel}
-        sectorCapacityFull={sectorCapacityFull}
+        sectorFullWarning={sectorFullWarning}
       />
     );
   }
