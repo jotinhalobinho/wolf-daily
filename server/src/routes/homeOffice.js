@@ -352,9 +352,14 @@ router.patch(
       }
       let fits = !!collaborator.sector_id;
       if (fits) {
-        const activeMembers = await db.all("SELECT id FROM collaborators WHERE sector_id = ? AND active = 1", [
-          collaborator.sector_id,
-        ]);
+        // Estagiário nunca entra em home office, então não conta pro mínimo
+        // presencial do setor — senão a conta ficaria generosa demais (ex:
+        // setor de 3 com 1 estagiário liberaria 2 vagas de HO, deixando só
+        // o estagiário sozinho na sala se as outras 2 pessoas saírem).
+        const activeMembers = await db.all(
+          "SELECT id FROM collaborators WHERE sector_id = ? AND active = 1 AND is_intern = 0",
+          [collaborator.sector_id]
+        );
         const maxHO = sectorMaxHO(activeMembers.length);
         const sectorUsedRows = await db.all(
           `SELECT DISTINCT e.collaborator_id FROM ho_entries e
@@ -602,9 +607,12 @@ router.post(
       return res.status(400).json({ error: "Cadastre um setor para este colaborador antes de liberar home office" });
     }
     const sector = await db.get("SELECT * FROM sectors WHERE id = ?", [collaborator.sector_id]);
-    const activeMembers = await db.all("SELECT id FROM collaborators WHERE sector_id = ? AND active = 1", [
-      collaborator.sector_id,
-    ]);
+    // Estagiário nunca entra em home office, então não conta pro mínimo
+    // presencial do setor (ver mesmo comentário na remarcação de reunião).
+    const activeMembers = await db.all(
+      "SELECT id FROM collaborators WHERE sector_id = ? AND active = 1 AND is_intern = 0",
+      [collaborator.sector_id]
+    );
     const maxHO = sectorMaxHO(activeMembers.length);
     const sectorUsedRows = await db.all(
       `SELECT DISTINCT e.collaborator_id FROM ho_entries e

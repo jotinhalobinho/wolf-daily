@@ -406,10 +406,12 @@ function HOSupervisorPanel({
 
   const collaboratorName = (id: string) => roster.find((c) => c.id === id)?.name ?? "—";
 
+  // Estagiário nunca entra em home office, então não conta pro mínimo
+  // presencial do setor (mesmo critério do servidor, ver homeOffice.js).
   const activeBySector = useMemo(() => {
     const map = new Map<string, number>();
     for (const c of roster) {
-      if (!c.active || !c.sectorId) continue;
+      if (!c.active || c.isIntern || !c.sectorId) continue;
       map.set(c.sectorId, (map.get(c.sectorId) ?? 0) + 1);
     }
     return map;
@@ -822,10 +824,12 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
   // setor usa a mesma cor, não é mais escolhida por colaborador.
   const sectorColorById = useMemo(() => new Map(sectors.map((s) => [s.id, s.color])), [sectors]);
 
+  // Estagiário nunca entra em home office, então não conta pro mínimo
+  // presencial do setor (mesmo critério do servidor, ver homeOffice.js).
   const activeMembersBySector = useMemo(() => {
     const map = new Map<string, HOMember[]>();
     for (const c of roster) {
-      if (!c.active || !c.sectorId) continue;
+      if (!c.active || c.isIntern || !c.sectorId) continue;
       if (!map.has(c.sectorId)) map.set(c.sectorId, []);
       map.get(c.sectorId)!.push(c);
     }
