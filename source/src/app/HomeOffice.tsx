@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "./api";
 import { Lock, Unlock, ChevronDown, ChevronUp, Plus, Trash2, AlertCircle, Info, Users as UsersIcon, X, Wrench } from "lucide-react";
 import { Sector, fmtDate, MONTHS } from "./App";
@@ -230,9 +230,9 @@ function HODayColumn({
   const showAddSelf = canSelfToggle && !selfOn && !selfBlockedReason;
 
   return (
-    <div className="flex flex-col border-r border-border last:border-r-0 min-w-[160px]">
+    <div className="flex flex-col border-r border-border last:border-r-0 min-w-0">
       <div className={`px-3 py-2 border-b border-border ${isToday ? "bg-muted" : ""}`}>
-        <p className={`text-xs font-semibold ${isToday ? "text-primary" : ""}`}>{weekdayFullName(date)}</p>
+        <p className={`text-xs font-semibold truncate ${isToday ? "text-primary" : ""}`}>{weekdayFullName(date)}</p>
         <p className="text-[10px] text-muted-foreground" style={{ fontFamily: "var(--font-mono)" }}>{fmtDayMonth(date)}</p>
       </div>
       <div className="p-2 space-y-1.5 flex-1">
@@ -535,7 +535,8 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
   const [roster, setRoster] = useState<HOMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [sectorFilter, setSectorFilter] = useState("all");
-  const [selectedWeekIndex, setSelectedWeekIndex] = useState(0);
+  // "month" mostra todas as semanas empilhadas; um número mostra só aquela semana.
+  const [weekFilter, setWeekFilter] = useState<"month" | number>("month");
   const [pendingCells, setPendingCells] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -551,23 +552,16 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
 
   const weeks = useMemo(() => (period ? computeWeeks(period.businessDays) : []), [period]);
 
-  // Ao carregar (ou trocar de) período, seleciona automaticamente a semana
-  // que contém hoje — se não houver (mês passado/futuro), fica na primeira.
+  // Ao trocar de período, volta pro filtro "Mês" (vê o mês inteiro de novo).
   useEffect(() => {
-    if (!period) return;
-    const idx = weeks.findIndex((w) => w.includes(today));
-    setSelectedWeekIndex(idx >= 0 ? idx : 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setWeekFilter("month");
   }, [period?.id]);
 
-  // O mês inteiro fica visível, um card de semana embaixo do outro — as abas
-  // de semana só rolam a tela até o bloco escolhido (âncora), sem esconder
-  // as outras semanas.
-  const weekRefs = useRef<(HTMLDivElement | null)[]>([]);
-  function goToWeek(i: number) {
-    setSelectedWeekIndex(i);
-    weekRefs.current[i]?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  // "Mês" mostra todas as semanas; "Semana N" mostra só aquele bloco.
+  const weeksToRender = useMemo(
+    () => (weekFilter === "month" ? weeks.map((week, i) => ({ week, i })) : weeks[weekFilter] ? [{ week: weeks[weekFilter], i: weekFilter }] : []),
+    [weeks, weekFilter]
+  );
 
   const entriesByCollaborator = useMemo(() => {
     const map = new Map<string, Set<string>>();
@@ -836,16 +830,24 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
 
         {period && (
           <>
-            {/* Abas de semana — âncoras: rolam até o card daquela semana, sem
-                esconder as outras. O mês inteiro fica visível, um card de
-                semana embaixo do outro. */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 sticky top-0 bg-background z-20 py-1 -mx-8 px-8">
+            {/* Filtro rápido: "Mês" mostra todas as semanas empilhadas;
+                escolher uma semana mostra só aquele bloco. flex-wrap em vez
+                de scroll horizontal — nunca deve aparecer barra lateral. */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setWeekFilter("month")}
+                className={`shrink-0 px-3 h-9 rounded-lg text-xs font-medium transition-all ${
+                  weekFilter === "month" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Mês
+              </button>
               {weeks.map((week, i) => (
                 <button
                   key={i}
-                  onClick={() => goToWeek(i)}
+                  onClick={() => setWeekFilter(i)}
                   className={`shrink-0 px-3 h-9 rounded-lg text-xs font-medium transition-all ${
-                    i === selectedWeekIndex ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
+                    weekFilter === i ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   Semana {i + 1}
@@ -856,14 +858,10 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
               ))}
             </div>
 
-            <div className="flex gap-6 items-start">
+            <div className="flex gap-6 items-start min-w-0">
               <div className="flex-1 min-w-0 space-y-4">
-                {weeks.map((week, i) => (
-                  <div
-                    key={i}
-                    ref={(el) => { weekRefs.current[i] = el; }}
-                    className="bg-card border border-border rounded-xl overflow-hidden scroll-mt-16"
-                  >
+                {weeksToRender.map(({ week, i }) => (
+                  <div key={i} className="bg-card border border-border rounded-xl overflow-hidden">
                     <div className="px-4 py-2 border-b border-border bg-muted/40">
                       <p className="text-xs font-semibold">
                         Semana {i + 1}
@@ -872,12 +870,14 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
                         </span>
                       </p>
                     </div>
-                    <div className="overflow-x-auto flex">{week.map((date) => renderDayColumn(date))}</div>
+                    <div className="grid" style={{ gridTemplateColumns: `repeat(${week.length}, minmax(0, 1fr))` }}>
+                      {week.map((date) => renderDayColumn(date))}
+                    </div>
                   </div>
                 ))}
               </div>
 
-              <div className="w-64 shrink-0 bg-card border border-border rounded-xl p-4 space-y-2 sticky top-16">
+              <div className="w-56 shrink-0 bg-card border border-border rounded-xl p-4 space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Resumo do mês</p>
                 {summaryCollaborators.map((c) => {
                   const count = entriesByCollaborator.get(c.id)?.size ?? 0;
