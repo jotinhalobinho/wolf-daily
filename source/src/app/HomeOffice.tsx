@@ -17,6 +17,7 @@ interface HOMember {
   sectorId?: string;
   hireDate?: string;
   active: boolean;
+  isIntern: boolean; // estagiário nunca tem direito a home office
 }
 
 interface HOEntry {
@@ -662,7 +663,7 @@ function HOSupervisorPanel({
                   <div className="flex flex-wrap items-center gap-2">
                     <select className="h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary" value={correctionCollaboratorId} onChange={(e) => setCorrectionCollaboratorId(e.target.value)}>
                       <option value="">Colaborador…</option>
-                      {roster.filter((c) => c.active).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      {roster.filter((c) => c.active).map((c) => <option key={c.id} value={c.id}>{c.name}{c.isIntern ? " (estagiário, sem direito a HO)" : ""}</option>)}
                     </select>
                     <input type="date" className="h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary" value={correctionDate} onChange={(e) => setCorrectionDate(e.target.value)} />
                     <button
@@ -1024,7 +1025,14 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
 
     const ownSpecial = specialByCollaborator.get(currentCollaboratorId);
     const selfOn = !!entriesByCollaborator.get(currentCollaboratorId)?.has(date);
-    const selfBlockedReason = ownSpecial ? (ownSpecial === "ferias" ? "Férias" : "Day off") : meeting ? "Reunião Geral" : undefined;
+    const selfIsIntern = collaboratorsById.get(currentCollaboratorId)?.isIntern;
+    const selfBlockedReason = ownSpecial
+      ? (ownSpecial === "ferias" ? "Férias" : "Day off")
+      : meeting
+      ? "Reunião Geral"
+      : selfIsIntern
+      ? "Estagiários não têm direito a home office"
+      : undefined;
     const canSelfToggle = !!period && period.status === "open" && !!currentCollaboratorId && !selfBlockedReason;
 
     // Só mostra o aviso quando o setor relevante (o filtrado, ou — sem

@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS collaborators (
   sector_id  VARCHAR(64) NULL,
   hire_date  DATE NULL,
   active     TINYINT(1) NOT NULL DEFAULT 1,
+  is_intern  TINYINT(1) NOT NULL DEFAULT 0,
   birth_date DATE NULL,
   salary     DECIMAL(12,2) NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
