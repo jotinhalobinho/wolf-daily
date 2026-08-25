@@ -246,7 +246,7 @@ function HODayColumn({
   const showAddSelf = canSelfToggle && !selfOn && !selfBlockedReason;
 
   return (
-    <div className="flex flex-col border-r border-border last:border-r-0 min-w-0">
+    <div className="flex flex-col border-b md:border-b-0 md:border-r border-border last:border-b-0 md:last:border-r-0 min-w-0">
       <div className={`px-3 py-2 border-b border-border ${isToday ? "bg-muted" : ""}`}>
         <p className={`text-xs font-semibold truncate ${isToday ? "text-primary" : ""}`}>{weekdayFullName(date)}</p>
         <p className="text-[10px] text-muted-foreground" style={{ fontFamily: "var(--font-mono)" }}>{fmtDayMonth(date)}</p>
@@ -446,7 +446,7 @@ function HOSupervisorPanel({
                   {period.generalMeetings.length === 0 && <span className="text-xs text-[var(--tone-subtle)]">Nenhuma marcada</span>}
                 </div>
                 {period.status === "open" && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <input type="date" className="h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary" value={meetingDate} onChange={(e) => setMeetingDate(e.target.value)} />
                     <input className="h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary flex-1" placeholder="Título (opcional)" value={meetingTitle} onChange={(e) => setMeetingTitle(e.target.value)} />
                     <button
@@ -474,7 +474,7 @@ function HOSupervisorPanel({
                   {period.specialDays.length === 0 && <span className="text-xs text-[var(--tone-subtle)]">Nenhum registrado</span>}
                 </div>
                 {period.status === "open" && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <select className="h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary" value={specialCollaboratorId} onChange={(e) => setSpecialCollaboratorId(e.target.value)}>
                       <option value="">Colaborador…</option>
                       {roster.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -514,7 +514,7 @@ function HOSupervisorPanel({
                   (ex: alguém que não pode mais ir presencial num dia e precisa trocar).
                 </p>
                 {period.status === "open" ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <select className="h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary" value={correctionCollaboratorId} onChange={(e) => setCorrectionCollaboratorId(e.target.value)}>
                       <option value="">Colaborador…</option>
                       {roster.filter((c) => c.active).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -829,8 +829,8 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
 
   return (
     <div className="flex-1 overflow-auto">
-      <div className="px-8 py-8 space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="px-4 md:px-8 py-6 md:py-8 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Home Office</h1>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -894,8 +894,8 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
               ))}
             </div>
 
-            <div className="flex gap-6 items-start min-w-0">
-              <div className="flex-1 min-w-0 space-y-4">
+            <div className="flex flex-col md:flex-row gap-6 items-start min-w-0">
+              <div className="flex-1 min-w-0 w-full space-y-4">
                 {weeksToRender.map(({ week, i }) => (
                   <div key={i} className="bg-card border border-border rounded-xl overflow-hidden">
                     <div className="px-4 py-2 border-b border-border bg-muted/40">
@@ -906,16 +906,18 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
                         </span>
                       </p>
                     </div>
-                    <div className="grid grid-cols-5">
+                    {/* Empilhado (1 coluna) no celular — cada dia é uma faixa cheia,
+                        legível; a grade lado a lado (5 colunas) só a partir de md. */}
+                    <div className="grid grid-cols-1 md:grid-cols-5">
                       {weekSlots(week).map((date, slot) =>
-                        date ? renderDayColumn(date) : <div key={slot} className="border-r border-border last:border-r-0" />
+                        date ? renderDayColumn(date) : <div key={slot} className="hidden md:block border-r border-border last:border-r-0" />
                       )}
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="w-56 shrink-0 bg-card border border-border rounded-xl p-4 space-y-2">
+              <div className="w-full md:w-56 md:shrink-0 bg-card border border-border rounded-xl p-4 space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Resumo do mês</p>
                 {summaryCollaborators.map((c) => {
                   const count = entriesByCollaborator.get(c.id)?.size ?? 0;
