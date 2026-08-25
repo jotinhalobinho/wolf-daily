@@ -724,6 +724,45 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
     return () => { cancelled = true; };
   }, []);
 
+  // Escuta o WebSocket do servidor (ver server/src/ws.js) pra atualizar a
+  // escala sozinha quando outra pessoa mexe nela — sem isso, com várias
+  // pessoas marcando os dias ao mesmo tempo (igual acontecia na planilha),
+  // cada uma só via o que os outros marcaram depois de dar F5. O servidor só
+  // avisa "algo mudou"; quem decide o que buscar é sempre o cliente, pelas
+  // mesmas rotas REST de sempre — o socket nunca carrega dado nenhum sozinho.
+  useEffect(() => {
+    let stopped = false;
+    let socket: WebSocket | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function connect() {
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      socket = new WebSocket(`${proto}//${window.location.host}/ws/home-office`);
+      socket.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg?.type === "home-office-updated") {
+            apiGet("/home-office/current").then((p) => { if (!stopped) setPeriod(p); }).catch(() => {});
+          }
+        } catch {
+          // mensagem que não é JSON válido — ignora
+        }
+      };
+      socket.onclose = () => {
+        if (stopped) return;
+        // Rede caiu, servidor reiniciou, etc. — tenta de novo em alguns segundos.
+        retryTimer = setTimeout(connect, 3000);
+      };
+    }
+    connect();
+
+    return () => {
+      stopped = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      socket?.close();
+    };
+  }, []);
+
   const today = todayISO();
 
   // A grade mostra os dias úteis normais E os dias sinalizados (feriado não

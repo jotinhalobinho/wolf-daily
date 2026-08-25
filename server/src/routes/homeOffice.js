@@ -8,6 +8,7 @@ const { requireAuth, requireAdmin } = require("../auth");
 const { getHolidaysForMonth } = require("../holidays");
 const { weekdaysOfMonth } = require("../dateUtils");
 const { weeklyQuotaForDate, isoWeekKey, sectorMaxHO } = require("../homeOfficeRules");
+const { broadcastHomeOfficeUpdate } = require("../ws");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -184,6 +185,7 @@ router.post(
       deadline,
     ]);
     const row = await db.get("SELECT * FROM ho_periods WHERE id = ?", [id]);
+    broadcastHomeOfficeUpdate();
     res.status(201).json(await loadPeriod(row));
   })
 );
@@ -217,6 +219,7 @@ router.patch(
       await db.run("UPDATE ho_periods SET deadline = ? WHERE id = ?", [deadline, existing.id]);
     }
     const row = await db.get("SELECT * FROM ho_periods WHERE id = ?", [existing.id]);
+    broadcastHomeOfficeUpdate();
     res.json(await loadPeriod(row));
   })
 );
@@ -241,6 +244,7 @@ router.post(
     ]);
     // Reunião Geral bloqueia HO pra empresa inteira nesse dia — limpa quem já tinha marcado.
     const affected = await clearEntriesOnDate(period.id, date);
+    broadcastHomeOfficeUpdate();
     res.status(201).json({
       id: Number(info.lastInsertRowid),
       date,
@@ -263,6 +267,7 @@ router.delete(
     if (!meeting) return res.status(404).json({ error: "Reunião não encontrada" });
     if (meeting.period_status !== "open") return res.status(403).json({ error: "Este período já foi aprovado" });
     await db.run("DELETE FROM ho_general_meetings WHERE id = ?", [meeting.id]);
+    broadcastHomeOfficeUpdate();
     res.json({ ok: true });
   })
 );
@@ -291,6 +296,7 @@ router.patch(
 
     if (newDate === oldDate) {
       await db.run("UPDATE ho_general_meetings SET title = ? WHERE id = ?", [title, meeting.id]);
+      broadcastHomeOfficeUpdate();
       return res.json({ id: meeting.id, date: newDate, title, movedCollaboratorIds: [], blockedCollaboratorIds: [] });
     }
 
@@ -355,6 +361,7 @@ router.patch(
       }
     }
 
+    broadcastHomeOfficeUpdate();
     res.json({ id: meeting.id, date: newDate, title, movedCollaboratorIds, blockedCollaboratorIds });
   })
 );
@@ -406,6 +413,7 @@ router.post(
     );
     // O dia de compensação vira folga — limpa quem já tinha HO marcado nele.
     const affected = await clearEntriesOnDate(period.id, compensationDate);
+    broadcastHomeOfficeUpdate();
 
     res.status(201).json({
       id: Number(info.lastInsertRowid),
@@ -433,6 +441,7 @@ router.delete(
     // O feriado volta a ficar bloqueado — limpa quem tinha marcado HO nele
     // enquanto estava "trabalhado".
     const affected = await clearEntriesOnDate(override.period_id, override.holiday_date);
+    broadcastHomeOfficeUpdate();
     res.json({ ok: true, affectedCollaboratorIds: affected });
   })
 );
@@ -468,6 +477,7 @@ router.post(
       date,
       type,
     ]);
+    broadcastHomeOfficeUpdate();
     res.status(201).json({ id: Number(info.lastInsertRowid), collaboratorId, date, type });
   })
 );
@@ -485,6 +495,7 @@ router.delete(
     if (!special) return res.status(404).json({ error: "Registro não encontrado" });
     if (special.period_status !== "open") return res.status(403).json({ error: "Este período já foi aprovado" });
     await db.run("DELETE FROM ho_special_days WHERE id = ?", [special.id]);
+    broadcastHomeOfficeUpdate();
     res.json({ ok: true });
   })
 );
@@ -594,6 +605,7 @@ router.post(
         collaboratorId,
         date,
       ]);
+      broadcastHomeOfficeUpdate();
     }
 
     res.status(existingEntry ? 200 : 201).json({
@@ -619,6 +631,7 @@ router.delete(
       collaboratorId,
       date,
     ]);
+    broadcastHomeOfficeUpdate();
     res.json({ collaboratorId, date, on: false });
   })
 );

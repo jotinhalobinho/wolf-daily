@@ -2,6 +2,7 @@
 
 const path = require("path");
 const fs = require("fs");
+const http = require("http");
 const express = require("express");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
@@ -9,6 +10,7 @@ require("dotenv").config();
 
 const db = require("./db");
 const { runMigrations } = require("./migrate");
+const ws = require("./ws");
 
 const authRoutes = require("./routes/auth");
 const usersRoutes = require("./routes/users");
@@ -86,7 +88,12 @@ async function start() {
     console.error("  Detalhe:", err.message || err, "\n");
   }
 
-  app.listen(PORT, () => {
+  // http.createServer(app) em vez de app.listen(...) — o WebSocket da Escala
+  // de Home Office (ver ./ws.js) precisa do mesmo servidor HTTP pra fazer o
+  // handshake de upgrade na mesma porta, sem precisar de outra porta/processo.
+  const server = http.createServer(app);
+  ws.init(server);
+  server.listen(PORT, () => {
     console.log(`\n  Rateio de Horas — servidor rodando em http://localhost:${PORT}\n`);
   });
 }
