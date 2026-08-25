@@ -14,7 +14,6 @@ import { weeklyQuotaForDate, isoWeekKey, sectorMaxHO } from "./homeOfficeRules";
 interface HOMember {
   id: string;
   name: string;
-  color?: string;
   sectorId?: string;
   hireDate?: string;
   active: boolean;
@@ -170,6 +169,7 @@ function computeWarnings(businessDays: string[], dates: string[]): string[] {
 interface HOPillProps {
   collaborator: HOMember;
   kind: "ho" | "ferias" | "dayoff";
+  color?: string; // cor do setor do colaborador (só usada quando kind === "ho")
   isSelf: boolean;
   canRemove: boolean;
   pending: boolean;
@@ -177,7 +177,7 @@ interface HOPillProps {
   onRemove: () => void;
 }
 
-function HOPill({ collaborator, kind, isSelf, canRemove, pending, warnings, onRemove }: HOPillProps) {
+function HOPill({ collaborator, kind, color, isSelf, canRemove, pending, warnings, onRemove }: HOPillProps) {
   const style =
     kind === "ferias"
       ? { className: "bg-[var(--accent-amber-bg)] text-amber-600", label: `🌴 ${collaborator.name}` }
@@ -188,9 +188,9 @@ function HOPill({ collaborator, kind, isSelf, canRemove, pending, warnings, onRe
   return (
     <div
       className={`flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg ${style.className} ${isSelf ? "ring-2 ring-primary/40" : ""} ${pending ? "opacity-50" : ""}`}
-      style={kind === "ho" ? { backgroundColor: `${collaborator.color || "var(--tone-subtle)"}22`, color: collaborator.color || undefined } : undefined}
+      style={kind === "ho" ? { backgroundColor: `${color || "var(--tone-subtle)"}22`, color: color || undefined } : undefined}
     >
-      {kind === "ho" && <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: collaborator.color || "var(--tone-subtle)" }} />}
+      {kind === "ho" && <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color || "var(--tone-subtle)" }} />}
       <span className="flex-1 truncate font-medium">{style.label}</span>
       {warnings.length > 0 && (
         <AlertCircle size={11} className="text-amber-500 shrink-0" title={warnings.join(" · ")} />
@@ -212,6 +212,7 @@ interface HODayColumnProps {
   meeting?: HOMeeting;
   hoEntries: HOMember[]; // quem está de HO nesse dia, já filtrado pelo setor
   specialEntries: { collaborator: HOMember; type: "ferias" | "dayoff" }[];
+  sectorColorById: Map<string, string | undefined>;
   warningsByCollaboratorId: Map<string, string[]>;
   currentCollaboratorId: string;
   selfOn: boolean;
@@ -230,6 +231,7 @@ function HODayColumn({
   meeting,
   hoEntries,
   specialEntries,
+  sectorColorById,
   warningsByCollaboratorId,
   currentCollaboratorId,
   selfOn,
@@ -277,6 +279,7 @@ function HODayColumn({
                 key={c.id}
                 collaborator={c}
                 kind="ho"
+                color={c.sectorId ? sectorColorById.get(c.sectorId) : undefined}
                 isSelf={c.id === currentCollaboratorId}
                 canRemove={canSelfToggle}
                 pending={pendingSelf && c.id === currentCollaboratorId}
@@ -598,6 +601,10 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
     return map;
   }, [period]);
 
+  // Cor da tag na Escala de Home Office é do setor — todo mundo do mesmo
+  // setor usa a mesma cor, não é mais escolhida por colaborador.
+  const sectorColorById = useMemo(() => new Map(sectors.map((s) => [s.id, s.color])), [sectors]);
+
   const activeMembersBySector = useMemo(() => {
     const map = new Map<string, HOMember[]>();
     for (const c of roster) {
@@ -784,6 +791,7 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
         meeting={meeting}
         hoEntries={hoEntries}
         specialEntries={specialEntries}
+        sectorColorById={sectorColorById}
         warningsByCollaboratorId={warningsByCollaboratorId}
         currentCollaboratorId={currentCollaboratorId}
         selfOn={selfOn}
@@ -899,7 +907,7 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
                   const count = entriesByCollaborator.get(c.id)?.size ?? 0;
                   return (
                     <div key={c.id} className="flex items-center gap-2 text-xs">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.color || "var(--tone-line)" }} />
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: (c.sectorId && sectorColorById.get(c.sectorId)) || "var(--tone-line)" }} />
                       <span className="flex-1 truncate">{c.name}</span>
                       <span className="text-muted-foreground tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{count}d</span>
                     </div>

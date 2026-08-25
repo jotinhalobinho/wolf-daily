@@ -30,16 +30,17 @@ export interface Collaborator {
   birthDate?: string;
   // Campos da Escala de Home Office (ver HomeOffice.tsx):
   sectorId?: string;
-  color?: string; // "#RRGGBB" — cor da tag desse colaborador na escala
   hireDate?: string; // "YYYY-MM-DD" — define a cota semanal automática de HO
   active: boolean; // conta pro mínimo presencial do setor quando true
 }
 
-// Setor/área — cadastro simples (nome), membros são os colaboradores cujo
-// sectorId aponta pra ele (editado no cadastro do colaborador, não aqui).
+// Setor/área — nome + cor da tag (todo mundo do mesmo setor usa a mesma cor
+// na Escala de Home Office). Membros são os colaboradores cujo sectorId
+// aponta pra ele (editado no cadastro do colaborador, não aqui).
 export interface Sector {
   id: string;
   name: string;
+  color?: string; // "#RRGGBB"
   memberIds: string[];
 }
 
@@ -407,24 +408,18 @@ interface CollaboratorFormProps {
   onCancel: () => void;
 }
 
-// Cor padrão sugerida pra colaboradores novos (só um ponto de partida no
-// color picker — cada um normalmente troca pra ficar igual à cor usada na
-// planilha antiga de Home Office).
-const DEFAULT_COLLABORATOR_COLOR = "#3b82f6";
-
 function CollaboratorForm({ initial, workingDays, sectors, onSave, onCancel }: CollaboratorFormProps) {
   const [name, setName] = useState(initial?.name ?? "");
   const [role, setRole] = useState(initial?.role ?? "");
   const [salary, setSalary] = useState(initial?.salary?.toString() ?? "");
   const [birthDate, setBirthDate] = useState(initial?.birthDate ?? "");
   const [sectorId, setSectorId] = useState(initial?.sectorId ?? "");
-  const [color, setColor] = useState(initial?.color ?? DEFAULT_COLLABORATOR_COLOR);
   const [hireDate, setHireDate] = useState(initial?.hireDate ?? "");
   const [active, setActive] = useState(initial?.active ?? true);
   const salaryNum = parseFloat(salary.replace(",", ".")) || 0;
   const daily = workingDays > 0 ? salaryNum / workingDays : 0;
-  const validColor = /^#[0-9a-fA-F]{6}$/.test(color);
-  const valid = name.trim() && role.trim() && salaryNum > 0 && validColor;
+  const valid = name.trim() && role.trim() && salaryNum > 0;
+  const selectedSector = sectors.find((s) => s.id === sectorId);
   return (
     <div className="bg-card border border-border rounded-xl p-5 space-y-4">
       <div className="grid grid-cols-2 gap-3">
@@ -456,23 +451,25 @@ function CollaboratorForm({ initial, workingDays, sectors, onSave, onCancel }: C
         </div>
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1.5">Setor (Home Office)</label>
-          <select className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" value={sectorId} onChange={(e) => setSectorId(e.target.value)}>
-            <option value="">Sem setor</option>
-            {sectors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+          <div className="relative">
+            {selectedSector?.color && (
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: selectedSector.color }} />
+            )}
+            <select
+              className={`w-full h-8 ${selectedSector?.color ? "pl-7" : "px-3"} pr-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all`}
+              value={sectorId}
+              onChange={(e) => setSectorId(e.target.value)}
+            >
+              <option value="">Sem setor</option>
+              {sectors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <p className="text-[10px] text-[var(--tone-subtle)] mt-1">A cor da tag na Escala de Home Office é a do setor (defina em Setores).</p>
         </div>
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1.5">Admissão (define a cota de Home Office)</label>
           <input type="date" className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" value={hireDate} onChange={(e) => setHireDate(e.target.value)} style={{ fontFamily: "var(--font-mono)" }} />
           <p className="text-[10px] text-[var(--tone-subtle)] mt-1">Menos de 1 mês: 0 dias/semana · 1 a 2 meses: 1 dia/semana · 2+ meses: 2 dias/semana.</p>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-muted-foreground mb-1.5">Cor na Escala de Home Office</label>
-          <div className="flex items-center gap-2">
-            <input type="color" value={validColor ? color : DEFAULT_COLLABORATOR_COLOR} onChange={(e) => setColor(e.target.value)} className="w-8 h-8 rounded-lg border border-border cursor-pointer bg-background p-0.5" />
-            <input className="flex-1 h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" placeholder="#3b82f6" value={color} onChange={(e) => setColor(e.target.value)} style={{ fontFamily: "var(--font-mono)" }} />
-          </div>
-          {!validColor && <p className="text-[10px] text-red-500 mt-1">Use o formato #RRGGBB</p>}
         </div>
         <div className="flex items-center justify-between px-1">
           <div>
@@ -488,7 +485,7 @@ function CollaboratorForm({ initial, workingDays, sectors, onSave, onCancel }: C
             limpos, pra garantir que o JSON enviado ao servidor tenha a chave
             e ele saiba que é pra apagar o valor — undefined simplesmente
             some do corpo da requisição (JSON.stringify descarta a chave). */}
-        <button onClick={() => valid && onSave({ name: name.trim(), role: role.trim(), salary: salaryNum, birthDate, sectorId: sectorId || "", color, hireDate, active })} disabled={!valid} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">Salvar</button>
+        <button onClick={() => valid && onSave({ name: name.trim(), role: role.trim(), salary: salaryNum, birthDate, sectorId: sectorId || "", hireDate, active })} disabled={!valid} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">Salvar</button>
       </div>
     </div>
   );
@@ -2170,7 +2167,8 @@ function ColaboradoresView({ collaborators, setCollaborators, workingDays, secto
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const totalFolha = collaborators.reduce((s, c) => s + c.salary, 0);
-  const sectorName = (id?: string) => sectors.find((s) => s.id === id)?.name ?? "—";
+  const sectorOf = (id?: string) => sectors.find((s) => s.id === id);
+  const sectorName = (id?: string) => sectorOf(id)?.name ?? "—";
 
   return (
     <div className="flex-1 overflow-auto">
@@ -2210,7 +2208,7 @@ function ColaboradoresView({ collaborators, setCollaborators, workingDays, secto
                   <tr key={c.id} className={`border-b border-[var(--border-4)] last:border-0 group ${c.active ? "" : "opacity-50"}`}>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2.5">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.color || "var(--tone-line)" }} title="Cor na Escala de Home Office" />
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sectorOf(c.sectorId)?.color || "var(--tone-line)" }} title="Cor do setor na Escala de Home Office" />
                         <Avatar name={c.name} />
                         <span className="text-sm font-medium">{c.name}</span>
                         {!c.active && <span className="text-[9px] font-medium uppercase tracking-wider text-[var(--tone-subtle)] border border-border rounded px-1 py-0.5">Inativo</span>}
@@ -2264,11 +2262,17 @@ interface SetoresViewProps {
   collaborators: Collaborator[];
 }
 
+// Cor padrão sugerida pra setores novos — só um ponto de partida no color
+// picker, geralmente trocada pra bater com a cor usada na planilha antiga.
+const DEFAULT_SECTOR_COLOR = "#3b82f6";
+
 function SetoresView({ sectors, setSectors, collaborators }: SetoresViewProps) {
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newColor, setNewColor] = useState(DEFAULT_SECTOR_COLOR);
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [editColor, setEditColor] = useState(DEFAULT_SECTOR_COLOR);
 
   const membersOf = (sector: Sector) =>
     collaborators.filter((c) => sector.memberIds.includes(c.id));
@@ -2277,8 +2281,9 @@ function SetoresView({ sectors, setSectors, collaborators }: SetoresViewProps) {
     const name = newName.trim();
     if (!name) return;
     setNewName("");
+    setNewColor(DEFAULT_SECTOR_COLOR);
     setAdding(false);
-    apiPost("/sectors", { name })
+    apiPost("/sectors", { name, color: newColor })
       .then((s) => setSectors((p) => [...p, s].sort((a, b) => a.name.localeCompare(b.name))))
       .catch((e) => alert(e.message));
   };
@@ -2287,7 +2292,7 @@ function SetoresView({ sectors, setSectors, collaborators }: SetoresViewProps) {
     const name = editName.trim();
     if (!name) return;
     setEditId(null);
-    apiPut(`/sectors/${id}`, { name })
+    apiPut(`/sectors/${id}`, { name, color: editColor })
       .then((s) => setSectors((p) => p.map((x) => (x.id === id ? s : x))))
       .catch((e) => alert(e.message));
   };
@@ -2310,6 +2315,7 @@ function SetoresView({ sectors, setSectors, collaborators }: SetoresViewProps) {
         </div>
         {adding && (
           <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-2">
+            <input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} className="w-8 h-8 rounded-lg border border-border cursor-pointer bg-background p-0.5 shrink-0" title="Cor do setor" />
             <input className="flex-1 h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" placeholder="Nome do setor" value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createSector()} autoFocus />
             <button onClick={() => setAdding(false)} className="h-8 px-3 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-input-background transition-all">Cancelar</button>
             <button onClick={createSector} disabled={!newName.trim()} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">Salvar</button>
@@ -2323,18 +2329,22 @@ function SetoresView({ sectors, setSectors, collaborators }: SetoresViewProps) {
                 <div className="flex items-center justify-between mb-2">
                   {editId === s.id ? (
                     <div className="flex items-center gap-2 flex-1">
+                      <input type="color" value={editColor} onChange={(e) => setEditColor(e.target.value)} className="w-8 h-8 rounded-lg border border-border cursor-pointer bg-background p-0.5 shrink-0" title="Cor do setor" />
                       <input className="flex-1 h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary focus:bg-card transition-all" value={editName} onChange={(e) => setEditName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && renameSector(s.id)} autoFocus />
                       <button onClick={() => setEditId(null)} className="h-8 px-3 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-input-background transition-all">Cancelar</button>
                       <button onClick={() => renameSector(s.id)} className="h-8 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all">Salvar</button>
                     </div>
                   ) : (
                     <>
-                      <div>
-                        <p className="text-sm font-semibold">{s.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{members.length} {members.length === 1 ? "membro" : "membros"}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color || "var(--tone-line)" }} />
+                        <div>
+                          <p className="text-sm font-semibold">{s.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{members.length} {members.length === 1 ? "membro" : "membros"}</p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button onClick={() => { setEditId(s.id); setEditName(s.name); }} className="w-6 h-6 rounded-md flex items-center justify-center text-[var(--tone-subtle)] hover:text-foreground hover:bg-input-background transition-all"><Pencil size={12} /></button>
+                        <button onClick={() => { setEditId(s.id); setEditName(s.name); setEditColor(s.color || DEFAULT_SECTOR_COLOR); }} className="w-6 h-6 rounded-md flex items-center justify-center text-[var(--tone-subtle)] hover:text-foreground hover:bg-input-background transition-all"><Pencil size={12} /></button>
                         <button onClick={() => removeSector(s)} className="w-6 h-6 rounded-md flex items-center justify-center text-[var(--tone-subtle)] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/15 transition-all"><Trash2 size={12} /></button>
                       </div>
                     </>
@@ -2344,7 +2354,7 @@ function SetoresView({ sectors, setSectors, collaborators }: SetoresViewProps) {
                   <div className="flex flex-wrap gap-1.5">
                     {members.map((m) => (
                       <span key={m.id} className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-muted">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: m.color || "var(--tone-line)" }} />
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color || "var(--tone-line)" }} />
                         {m.name}
                       </span>
                     ))}

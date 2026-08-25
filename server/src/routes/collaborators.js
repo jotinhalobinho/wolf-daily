@@ -17,7 +17,6 @@ function rowToCollaborator(r) {
     salary: r.salary,
     birthDate: r.birth_date || undefined,
     sectorId: r.sector_id || undefined,
-    color: r.color || undefined,
     hireDate: r.hire_date || undefined,
     active: !!r.active,
   };
@@ -29,16 +28,6 @@ function parseISODateOrNull(value) {
   if (value == null || value === "") return null;
   const s = String(value).trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return undefined; // inválido
-  return s;
-}
-
-const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
-
-// Aceita "" / null / undefined (limpa o campo) ou um hex "#RRGGBB".
-function parseColorOrNull(value) {
-  if (value == null || value === "") return null;
-  const s = String(value).trim();
-  if (!HEX_COLOR_RE.test(s)) return undefined; // inválido
   return s;
 }
 
@@ -64,12 +53,14 @@ async function validateSectorId(sectorId) {
   return { value: sectorId, ok: !!row };
 }
 
-// POST /api/collaborators  { name, role, salary, birthDate?, sectorId?, color?, hireDate?, active? }
+// POST /api/collaborators  { name, role, salary, birthDate?, sectorId?, hireDate?, active? }
+// A cor da tag na Escala de Home Office é do setor (ver routes/sectors.js),
+// não é mais escolhida por colaborador.
 router.post(
   "/",
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const { name, role, salary, birthDate, sectorId, color, hireDate, active } = req.body || {};
+    const { name, role, salary, birthDate, sectorId, hireDate, active } = req.body || {};
     const salaryNum = Number(salary);
     if (!name || !String(name).trim() || !role || !String(role).trim() || !(salaryNum > 0)) {
       return res.status(400).json({ error: "Dados inválidos" });
@@ -78,8 +69,6 @@ router.post(
     if (birth === undefined) return res.status(400).json({ error: "Data de aniversário inválida" });
     const hire = parseISODateOrNull(hireDate);
     if (hire === undefined) return res.status(400).json({ error: "Data de admissão inválida" });
-    const colorValue = parseColorOrNull(color);
-    if (colorValue === undefined) return res.status(400).json({ error: "Cor inválida (use o formato #RRGGBB)" });
     const sector = await validateSectorId(sectorId);
     if (!sector.ok) return res.status(400).json({ error: "Setor não encontrado" });
     const activeValue = active != null ? (active ? 1 : 0) : 1;
@@ -88,8 +77,8 @@ router.post(
     const existingId = await db.get("SELECT id FROM collaborators WHERE id = ?", [id]);
     if (existingId) return res.status(400).json({ error: "Identificador já utilizado" });
     await db.run(
-      "INSERT INTO collaborators (id, name, role, sector_id, color, hire_date, active, birth_date, salary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [id, String(name).trim(), String(role).trim(), sector.value, colorValue, hire, activeValue, birth, salaryNum]
+      "INSERT INTO collaborators (id, name, role, sector_id, hire_date, active, birth_date, salary) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [id, String(name).trim(), String(role).trim(), sector.value, hire, activeValue, birth, salaryNum]
     );
     res.status(201).json({
       id,
@@ -98,14 +87,13 @@ router.post(
       salary: salaryNum,
       birthDate: birth || undefined,
       sectorId: sector.value || undefined,
-      color: colorValue || undefined,
       hireDate: hire || undefined,
       active: !!activeValue,
     });
   })
 );
 
-// PUT /api/collaborators/:id  { name, role, salary, birthDate?, sectorId?, color?, hireDate?, active? }
+// PUT /api/collaborators/:id  { name, role, salary, birthDate?, sectorId?, hireDate?, active? }
 router.put(
   "/:id",
   requireAdmin,
@@ -118,12 +106,10 @@ router.put(
     const salary = req.body.salary != null ? Number(req.body.salary) : existing.salary;
     const birth = req.body.birthDate !== undefined ? parseISODateOrNull(req.body.birthDate) : existing.birth_date;
     const hire = req.body.hireDate !== undefined ? parseISODateOrNull(req.body.hireDate) : existing.hire_date;
-    const colorValue = req.body.color !== undefined ? parseColorOrNull(req.body.color) : existing.color;
     const activeValue = req.body.active != null ? (req.body.active ? 1 : 0) : existing.active;
     if (!name || !role || !(salary > 0)) return res.status(400).json({ error: "Dados inválidos" });
     if (birth === undefined) return res.status(400).json({ error: "Data de aniversário inválida" });
     if (hire === undefined) return res.status(400).json({ error: "Data de admissão inválida" });
-    if (colorValue === undefined) return res.status(400).json({ error: "Cor inválida (use o formato #RRGGBB)" });
     let sectorId = existing.sector_id;
     if (req.body.sectorId !== undefined) {
       const sector = await validateSectorId(req.body.sectorId);
@@ -131,8 +117,8 @@ router.put(
       sectorId = sector.value;
     }
     await db.run(
-      "UPDATE collaborators SET name = ?, role = ?, sector_id = ?, color = ?, hire_date = ?, active = ?, birth_date = ?, salary = ? WHERE id = ?",
-      [name, role, sectorId, colorValue, hire, activeValue, birth, salary, id]
+      "UPDATE collaborators SET name = ?, role = ?, sector_id = ?, hire_date = ?, active = ?, birth_date = ?, salary = ? WHERE id = ?",
+      [name, role, sectorId, hire, activeValue, birth, salary, id]
     );
     res.json({
       id,
@@ -141,7 +127,6 @@ router.put(
       salary,
       birthDate: birth || undefined,
       sectorId: sectorId || undefined,
-      color: colorValue || undefined,
       hireDate: hire || undefined,
       active: !!activeValue,
     });

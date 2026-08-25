@@ -3,6 +3,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 CREATE TABLE IF NOT EXISTS sectors (
   id         VARCHAR(64) PRIMARY KEY,
   name       VARCHAR(255) NOT NULL,
+  color      VARCHAR(7) NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT uq_sector_name UNIQUE (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -12,7 +13,6 @@ CREATE TABLE IF NOT EXISTS collaborators (
   name       VARCHAR(255) NOT NULL,
   role       VARCHAR(100) NOT NULL,
   sector_id  VARCHAR(64) NULL,
-  color      VARCHAR(7) NULL,
   hire_date  DATE NULL,
   active     TINYINT(1) NOT NULL DEFAULT 1,
   birth_date DATE NULL,

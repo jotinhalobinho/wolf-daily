@@ -33,6 +33,7 @@ async function runMigrations() {
   await db.run(`CREATE TABLE IF NOT EXISTS sectors (
     id VARCHAR(64) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    color VARCHAR(7) NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_sector_name UNIQUE (name)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
@@ -68,19 +69,26 @@ async function runMigrations() {
     CONSTRAINT fk_ho_meeting_period FOREIGN KEY (period_id) REFERENCES ho_periods(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
-  // Escala de Home Office — setor, cor da tag, data de admissão (define a
-  // cota semanal automática) e se o colaborador está ativo (conta pro mínimo
-  // presencial do setor). Ver server/src/homeOfficeRules.js.
+  // Escala de Home Office — setor, data de admissão (define a cota semanal
+  // automática) e se o colaborador está ativo (conta pro mínimo presencial
+  // do setor). Ver server/src/homeOfficeRules.js.
   if (!(await columnExists("collaborators", "sector_id"))) {
     await db.run("ALTER TABLE collaborators ADD COLUMN sector_id VARCHAR(64) NULL AFTER role");
     console.log("  [migração] coluna collaborators.sector_id criada.");
   }
-  if (!(await columnExists("collaborators", "color"))) {
-    await db.run("ALTER TABLE collaborators ADD COLUMN color VARCHAR(7) NULL AFTER sector_id");
-    console.log("  [migração] coluna collaborators.color criada.");
+  if (!(await columnExists("sectors", "color"))) {
+    await db.run("ALTER TABLE sectors ADD COLUMN color VARCHAR(7) NULL AFTER name");
+    console.log("  [migração] coluna sectors.color criada.");
+  }
+  // A cor da tag na Escala de Home Office passou a ser do setor, não mais do
+  // colaborador individualmente — remove a coluna antiga se alguém já tinha
+  // rodado uma versão anterior desta migração.
+  if (await columnExists("collaborators", "color")) {
+    await db.run("ALTER TABLE collaborators DROP COLUMN color");
+    console.log("  [migração] coluna collaborators.color removida (cor agora é do setor).");
   }
   if (!(await columnExists("collaborators", "hire_date"))) {
-    await db.run("ALTER TABLE collaborators ADD COLUMN hire_date DATE NULL AFTER color");
+    await db.run("ALTER TABLE collaborators ADD COLUMN hire_date DATE NULL AFTER sector_id");
     console.log("  [migração] coluna collaborators.hire_date criada.");
   }
   if (!(await columnExists("collaborators", "active"))) {
