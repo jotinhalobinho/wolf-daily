@@ -265,9 +265,9 @@ function ProjectEntryForm({
   };
 
   return (
-    <div className="bg-[#f7f7f8] rounded-lg p-2.5 space-y-2.5">
+    <div className="bg-background rounded-lg p-2.5 space-y-2.5">
       <div>
-        <label className="block text-[9px] font-semibold uppercase tracking-wider text-[#a1a1aa] mb-1">Projeto</label>
+        <label className="block text-[9px] font-semibold uppercase tracking-wider text-[var(--tone-subtle)] mb-1">Projeto</label>
         <input
           type="text"
           value={name}
@@ -275,11 +275,11 @@ function ProjectEntryForm({
           placeholder="Nome do projeto…"
           onChange={(e) => handleNameChange(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
-          className="w-full h-7 px-2.5 text-xs bg-white border border-[rgba(0,0,0,0.1)] rounded-lg outline-none focus:border-[#18181b]"
+          className="w-full h-7 px-2.5 text-xs bg-card border border-[var(--border-10)] rounded-lg outline-none focus:border-primary"
         />
       </div>
       <div>
-        <label className="block text-[9px] font-semibold uppercase tracking-wider text-[#a1a1aa] mb-1">Centro de custo</label>
+        <label className="block text-[9px] font-semibold uppercase tracking-wider text-[var(--tone-subtle)] mb-1">Centro de custo</label>
         <div className="flex items-center gap-1 flex-wrap">
           <button
             type="button"
@@ -288,7 +288,7 @@ function ProjectEntryForm({
             className="h-6 px-2 rounded-md text-[10px] font-semibold border border-dashed transition-all"
             style={general
               ? { backgroundColor: "#71717a", borderColor: "#71717a", color: "#fff" }
-              : { backgroundColor: "#fff", borderColor: "rgba(0,0,0,0.2)", color: "#71717a" }}
+              : { backgroundColor: "var(--card)", borderColor: "var(--border-20)", color: "var(--muted-foreground)" }}
           >
             Geral
           </button>
@@ -302,7 +302,7 @@ function ProjectEntryForm({
                 className="h-6 px-2 rounded-md text-[10px] font-semibold border transition-all"
                 style={active
                   ? { backgroundColor: UNIT_COLORS[u], borderColor: UNIT_COLORS[u], color: "#fff" }
-                  : { backgroundColor: "#fff", borderColor: "rgba(0,0,0,0.1)", color: "#71717a" }}
+                  : { backgroundColor: "var(--card)", borderColor: "var(--border-10)", color: "var(--muted-foreground)" }}
               >
                 {UNIT_NAMES[u]}
               </button>
@@ -312,20 +312,20 @@ function ProjectEntryForm({
       </div>
       {units.includes("fraga") && (
         <div>
-          <label className="block text-[9px] font-semibold uppercase tracking-wider text-[#a1a1aa] mb-1">Operação</label>
+          <label className="block text-[9px] font-semibold uppercase tracking-wider text-[var(--tone-subtle)] mb-1">Operação</label>
           <OperationTagPicker value={operations} onChange={setOperations} />
         </div>
       )}
       <div className="flex justify-end gap-2">
         {onCancel && (
-          <button onClick={onCancel} className="h-7 px-3 text-xs font-medium text-[#71717a] hover:text-[#18181b] rounded-lg hover:bg-white transition-all">
+          <button onClick={onCancel} className="h-7 px-3 text-xs font-medium text-muted-foreground hover:text-foreground rounded-lg hover:bg-card transition-all">
             Cancelar
           </button>
         )}
         <button
           onClick={submit}
           disabled={!valid}
-          className="h-7 px-3 flex items-center gap-1 rounded-lg bg-[#18181b] text-white text-xs font-medium disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#27272a] transition-all"
+          className="h-7 px-3 flex items-center gap-1 rounded-lg bg-primary text-primary-foreground text-xs font-medium disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/90 transition-all"
         >
           <Plus size={13} />{submitLabel}
         </button>
@@ -352,25 +352,25 @@ function ItemGroupRow({
       <span className="text-xs flex-1 truncate">{group.projectName}</span>
       <div className="flex items-center gap-1 flex-wrap justify-end shrink-0">
         {group.general && (
-          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f1f1f3] text-[#71717a]">Geral</span>
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Geral</span>
         )}
         {group.units.map((u) => (
-          <span key={u} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f1f1f3]" style={{ color: UNIT_COLORS[u] }}>
+          <span key={u} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted" style={{ color: UNIT_COLORS[u] }}>
             {UNIT_NAMES[u]}
           </span>
         ))}
         {group.operations.length > 0 && (
-          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f1f1f3] text-[#71717a]">
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
             {operationsToExportText(group.operations)}
           </span>
         )}
       </div>
       {!disabled && (
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all shrink-0">
-          <button onClick={onEdit} className="w-5 h-5 flex items-center justify-center rounded hover:bg-[#f1f1f3] text-[#a1a1aa] hover:text-[#18181b] transition-all">
+          <button onClick={onEdit} className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted text-[var(--tone-subtle)] hover:text-foreground transition-all">
             <Pencil size={10} />
           </button>
-          <button onClick={onRemove} className="w-5 h-5 flex items-center justify-center rounded hover:bg-red-50 hover:text-red-400 text-[#c0c0c8] transition-all">
+          <button onClick={onRemove} className="w-5 h-5 flex items-center justify-center rounded hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-400 text-[var(--tone-faint)] transition-all">
             <X size={10} strokeWidth={2.5} />
           </button>
         </div>
@@ -406,25 +406,25 @@ function DayRow({
   const excludedHoliday = !!day.holidayName && !day.isBusinessDay;
 
   return (
-    <div className={`rounded-xl border p-3.5 ${excludedHoliday ? "bg-[#fafafa] border-[rgba(0,0,0,0.05)]" : "bg-white border-[rgba(0,0,0,0.07)]"}`}>
+    <div className={`rounded-xl border p-3.5 ${excludedHoliday ? "bg-[var(--tone-card-alt)] border-[var(--border-5)]" : "bg-card border-border"}`}>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2.5">
           <span className="text-sm font-semibold tabular-nums w-16" style={{ fontFamily: "var(--font-mono)" }}>{fmtDayLabel(day.date)}</span>
           {day.holidayName && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600">Feriado: {day.holidayName}</span>
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/15 text-amber-600">Feriado: {day.holidayName}</span>
           )}
         </div>
         <div className="flex items-center gap-3">
           {day.holidayName && !disabled && (
             <button
               onClick={() => onPatch(day.id, { holidayOverride: !day.isBusinessDay })}
-              className="text-[11px] font-medium text-[#71717a] hover:text-[#18181b] underline decoration-dotted"
+              className="text-[11px] font-medium text-muted-foreground hover:text-foreground underline decoration-dotted"
             >
               {day.isBusinessDay ? "Marcar como não útil" : "Considerar como dia útil"}
             </button>
           )}
           {day.isBusinessDay && (
-            <label className={`flex items-center gap-1.5 text-xs ${disabled ? "text-[#c0c0c8]" : "text-[#71717a] cursor-pointer"}`}>
+            <label className={`flex items-center gap-1.5 text-xs ${disabled ? "text-[var(--tone-faint)]" : "text-muted-foreground cursor-pointer"}`}>
               <input
                 type="checkbox"
                 checked={day.atestado}
@@ -437,7 +437,7 @@ function DayRow({
           )}
           {day.isBusinessDay && isBirthdayMonth && (
             <label
-              className={`flex items-center gap-1.5 text-xs ${disabled ? "text-[#c0c0c8]" : "text-[#71717a] cursor-pointer"}`}
+              className={`flex items-center gap-1.5 text-xs ${disabled ? "text-[var(--tone-faint)]" : "text-muted-foreground cursor-pointer"}`}
               title="Day off de aniversário — só um dia por mês"
             >
               <input
@@ -484,11 +484,11 @@ function DayRow({
           {!disabled && editingProject === null && (
             <ProjectEntryForm projectCatalog={projectCatalog} onSubmit={(units, name, ops, general) => onAddItem(day.id, units, name, ops, general)} />
           )}
-          {disabled && day.items.length === 0 && <p className="text-xs text-[#c0c0c8]">Sem lançamentos</p>}
+          {disabled && day.items.length === 0 && <p className="text-xs text-[var(--tone-faint)]">Sem lançamentos</p>}
         </div>
       )}
 
-      {day.atestado && <p className="mt-2 text-xs text-[#a1a1aa]">Dia registrado como atestado.</p>}
+      {day.atestado && <p className="mt-2 text-xs text-[var(--tone-subtle)]">Dia registrado como atestado.</p>}
       {day.dayOff && <p className="mt-2 text-xs text-pink-600">🎂 Dia registrado como day off de aniversário.</p>}
     </div>
   );
@@ -513,14 +513,14 @@ function DayNavigator({
       <button
         onClick={() => onChange(Math.max(0, index - 1))}
         disabled={index === 0}
-        className="h-8 px-3 text-xs font-medium bg-white border border-[rgba(0,0,0,0.1)] rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:border-[rgba(0,0,0,0.2)] transition-all flex items-center gap-1 shrink-0"
+        className="h-8 px-3 text-xs font-medium bg-card border border-[var(--border-10)] rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:border-[var(--border-20)] transition-all flex items-center gap-1 shrink-0"
       >
         <ChevronLeft size={14} />Dia anterior
       </button>
       <div className="text-center min-w-0">
         <p className="text-sm font-semibold truncate">{fmtDayFull(day.date)}</p>
         {index !== defaultIndex && (
-          <button onClick={() => onChange(defaultIndex)} className="text-[11px] text-[#71717a] hover:text-[#18181b] underline decoration-dotted">
+          <button onClick={() => onChange(defaultIndex)} className="text-[11px] text-muted-foreground hover:text-foreground underline decoration-dotted">
             Voltar para hoje
           </button>
         )}
@@ -528,7 +528,7 @@ function DayNavigator({
       <button
         onClick={() => onChange(Math.min(days.length - 1, index + 1))}
         disabled={index === days.length - 1}
-        className="h-8 px-3 text-xs font-medium bg-white border border-[rgba(0,0,0,0.1)] rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:border-[rgba(0,0,0,0.2)] transition-all flex items-center gap-1 shrink-0"
+        className="h-8 px-3 text-xs font-medium bg-card border border-[var(--border-10)] rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:border-[var(--border-20)] transition-all flex items-center gap-1 shrink-0"
       >
         Próximo dia<ChevronRight size={14} />
       </button>
@@ -543,33 +543,33 @@ function MonthOverviewRow({ day, onOpen }: { day: DailyDay; onOpen: () => void }
   return (
     <button
       onClick={onOpen}
-      className={`w-full text-left rounded-lg border px-3 py-2 flex items-center gap-3 transition-all hover:border-[rgba(0,0,0,0.2)] ${excludedHoliday ? "bg-[#fafafa] border-[rgba(0,0,0,0.05)]" : "bg-white border-[rgba(0,0,0,0.07)]"}`}
+      className={`w-full text-left rounded-lg border px-3 py-2 flex items-center gap-3 transition-all hover:border-[var(--border-20)] ${excludedHoliday ? "bg-[var(--tone-card-alt)] border-[var(--border-5)]" : "bg-card border-border"}`}
     >
       <span className="text-xs font-semibold tabular-nums w-16 shrink-0" style={{ fontFamily: "var(--font-mono)" }}>{fmtDayLabel(day.date)}</span>
       {day.holidayName && (
-        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 shrink-0">
+        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/15 text-amber-600 shrink-0">
           Feriado{day.isBusinessDay ? " (útil)" : ""}
         </span>
       )}
       {day.isBusinessDay && day.atestado && (
-        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 shrink-0">Atestado</span>
+        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-500/15 text-blue-600 shrink-0">Atestado</span>
       )}
       {day.isBusinessDay && day.dayOff && (
-        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-pink-50 text-pink-600 shrink-0">🎂 Day off</span>
+        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-pink-50 dark:bg-pink-500/15 text-pink-600 shrink-0">🎂 Day off</span>
       )}
       {day.isBusinessDay && !day.atestado && !day.dayOff && day.items.length === 0 && (
-        <span className="text-xs text-[#c0c0c8]">Sem lançamentos</span>
+        <span className="text-xs text-[var(--tone-faint)]">Sem lançamentos</span>
       )}
       {day.isBusinessDay && !day.atestado && !day.dayOff && day.items.length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
           {groupDayItems(day.items).map((group) => (
-            <span key={group.projectName} className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#f1f1f3] text-[#71717a] shrink-0">
+            <span key={group.projectName} className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
               {group.projectName}
             </span>
           ))}
         </div>
       )}
-      <ChevronRight size={14} className="text-[#c0c0c8] ml-auto shrink-0" />
+      <ChevronRight size={14} className="text-[var(--tone-faint)] ml-auto shrink-0" />
     </button>
   );
 }
@@ -702,7 +702,7 @@ export default function DailyRateio({ displayName, birthDate }: { displayName: s
   };
 
   if (loading) {
-    return <div className="flex-1 flex items-center justify-center text-sm text-[#a1a1aa]">Carregando…</div>;
+    return <div className="flex-1 flex items-center justify-center text-sm text-[var(--tone-subtle)]">Carregando…</div>;
   }
 
   if (viewing) {
@@ -713,12 +713,12 @@ export default function DailyRateio({ displayName, birthDate }: { displayName: s
         <div className="max-w-3xl mx-auto px-8 py-8 space-y-5">
           <div className="flex items-center justify-between">
             <div>
-              <button onClick={() => setViewing(null)} className="text-xs text-[#71717a] hover:text-[#18181b] mb-1">← Voltar ao mês atual</button>
-              <h1 className="text-xl font-semibold tracking-tight">{MONTHS[viewing.month - 1]} {viewing.year} <span className="text-xs font-normal text-[#a1a1aa]">(encerrado)</span></h1>
+              <button onClick={() => setViewing(null)} className="text-xs text-muted-foreground hover:text-foreground mb-1">← Voltar ao mês atual</button>
+              <h1 className="text-xl font-semibold tracking-tight">{MONTHS[viewing.month - 1]} {viewing.year} <span className="text-xs font-normal text-[var(--tone-subtle)]">(encerrado)</span></h1>
             </div>
             <button
               onClick={() => exportDailyPeriodToExcel(viewing, displayName)}
-              className="h-8 px-3.5 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] transition-all flex items-center gap-1.5"
+              className="h-8 px-3.5 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all flex items-center gap-1.5"
             >
               <FileSpreadsheet size={14} />Exportar Excel
             </button>
@@ -744,27 +744,27 @@ export default function DailyRateio({ displayName, birthDate }: { displayName: s
     return (
       <div className="flex-1 overflow-auto">
         <div className="max-w-md mx-auto px-8 py-16">
-          <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-8 text-center">
-            <div className="w-10 h-10 bg-[#f1f1f3] rounded-xl flex items-center justify-center mb-3 mx-auto"><CalendarDays size={18} className="text-[#a1a1aa]" /></div>
+          <div className="bg-card border border-border rounded-xl p-8 text-center">
+            <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center mb-3 mx-auto"><CalendarDays size={18} className="text-[var(--tone-subtle)]" /></div>
             <p className="text-sm font-semibold">Iniciar rateio diário</p>
-            <p className="text-xs text-[#a1a1aa] mt-1 mb-5">Escolha o mês para começar a lançar suas atividades dia a dia</p>
+            <p className="text-xs text-[var(--tone-subtle)] mt-1 mb-5">Escolha o mês para começar a lançar suas atividades dia a dia</p>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="relative">
-                <select value={firstMonth} onChange={(e) => setFirstMonth(Number(e.target.value))} className="w-full appearance-none h-8 pl-3 pr-7 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none cursor-pointer">
+                <select value={firstMonth} onChange={(e) => setFirstMonth(Number(e.target.value))} className="w-full appearance-none h-8 pl-3 pr-7 text-sm bg-background border border-border rounded-lg outline-none cursor-pointer">
                   {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
                 </select>
-                <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#a1a1aa] pointer-events-none" />
+                <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--tone-subtle)] pointer-events-none" />
               </div>
-              <input type="number" value={firstYear} onChange={(e) => setFirstYear(Number(e.target.value))} className="w-full h-8 px-3 text-sm bg-[#f7f7f8] border border-[rgba(0,0,0,0.07)] rounded-lg outline-none" style={{ fontFamily: "var(--font-mono)" }} />
+              <input type="number" value={firstYear} onChange={(e) => setFirstYear(Number(e.target.value))} className="w-full h-8 px-3 text-sm bg-background border border-border rounded-lg outline-none" style={{ fontFamily: "var(--font-mono)" }} />
             </div>
-            <button onClick={startFirstPeriod} className="w-full h-8 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] transition-all">Iniciar mês</button>
+            <button onClick={startFirstPeriod} className="w-full h-8 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all">Iniciar mês</button>
           </div>
           {pastPeriods.length > 0 && (
             <div className="mt-6">
-              <p className="text-xs font-medium text-[#71717a] mb-2 flex items-center gap-1.5"><History size={12} />Meses anteriores</p>
+              <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5"><History size={12} />Meses anteriores</p>
               <div className="space-y-1.5">
                 {[...pastPeriods].reverse().map((p) => (
-                  <button key={p.id} onClick={() => openPastPeriod(p.id)} className="w-full text-left text-xs px-3 py-2 rounded-lg bg-white border border-[rgba(0,0,0,0.07)] hover:border-[rgba(0,0,0,0.14)] transition-all">
+                  <button key={p.id} onClick={() => openPastPeriod(p.id)} className="w-full text-left text-xs px-3 py-2 rounded-lg bg-card border border-border hover:border-[var(--border-14)] transition-all">
                     {MONTHS[p.month - 1]} {p.year}
                   </button>
                 ))}
@@ -794,18 +794,18 @@ export default function DailyRateio({ displayName, birthDate }: { displayName: s
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Meu Rateio Diário</h1>
-            <p className="text-xs text-[#71717a] mt-0.5">{MONTHS[period.month - 1]} {period.year}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{MONTHS[period.month - 1]} {period.year}</p>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => exportDailyPeriodToExcel(period, displayName)}
-              className="h-8 px-3.5 text-sm font-medium bg-white border border-[rgba(0,0,0,0.1)] rounded-lg hover:border-[rgba(0,0,0,0.2)] transition-all flex items-center gap-1.5"
+              className="h-8 px-3.5 text-sm font-medium bg-card border border-[var(--border-10)] rounded-lg hover:border-[var(--border-20)] transition-all flex items-center gap-1.5"
             >
               <FileSpreadsheet size={14} />Exportar Excel
             </button>
             <button
               onClick={advanceMonth}
-              className="h-8 px-3.5 text-sm font-medium bg-[#18181b] text-white rounded-lg hover:bg-[#27272a] transition-all flex items-center gap-1.5"
+              className="h-8 px-3.5 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all flex items-center gap-1.5"
             >
               Iniciar próximo mês<ArrowRight size={14} />
             </button>
@@ -813,34 +813,34 @@ export default function DailyRateio({ displayName, birthDate }: { displayName: s
         </div>
 
         <div className="grid grid-cols-4 gap-3">
-          <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-3">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-[#a1a1aa]">Dias úteis</p>
+          <div className="bg-card border border-border rounded-xl p-3">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--tone-subtle)]">Dias úteis</p>
             <p className="text-lg font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{businessDays.length}</p>
           </div>
-          <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-3">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-[#a1a1aa]">Lançados</p>
+          <div className="bg-card border border-border rounded-xl p-3">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--tone-subtle)]">Lançados</p>
             <p className="text-lg font-semibold tabular-nums text-emerald-600" style={{ fontFamily: "var(--font-mono)" }}>{workedDays}</p>
           </div>
-          <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-3">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-[#a1a1aa]">Atestado</p>
+          <div className="bg-card border border-border rounded-xl p-3">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--tone-subtle)]">Atestado</p>
             <p className="text-lg font-semibold tabular-nums text-amber-600" style={{ fontFamily: "var(--font-mono)" }}>{atestadoDays}</p>
           </div>
-          <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-xl p-3">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-[#a1a1aa]">Pendentes</p>
+          <div className="bg-card border border-border rounded-xl p-3">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--tone-subtle)]">Pendentes</p>
             <p className={`text-lg font-semibold tabular-nums ${pendingDays > 0 ? "text-red-500" : ""}`} style={{ fontFamily: "var(--font-mono)" }}>{pendingDays}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 bg-[#f1f1f3] rounded-lg p-1 w-fit">
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-1 w-fit">
           <button
             onClick={() => setMonthView(false)}
-            className={`h-7 px-3 text-xs font-medium rounded-md transition-all ${!monthView ? "bg-white shadow-sm text-[#18181b]" : "text-[#71717a]"}`}
+            className={`h-7 px-3 text-xs font-medium rounded-md transition-all ${!monthView ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
           >
             Dia atual
           </button>
           <button
             onClick={() => setMonthView(true)}
-            className={`h-7 px-3 text-xs font-medium rounded-md transition-all ${monthView ? "bg-white shadow-sm text-[#18181b]" : "text-[#71717a]"}`}
+            className={`h-7 px-3 text-xs font-medium rounded-md transition-all ${monthView ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
           >
             Visão do mês
           </button>
