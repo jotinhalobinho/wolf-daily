@@ -8,7 +8,7 @@ const { requireAuth, requireAdmin } = require("../auth");
 const { getHolidaysForMonth } = require("../holidays");
 const { weekdaysOfMonth } = require("../dateUtils");
 const { weeklyQuotaForDate, isoWeekKey, sectorMaxHO } = require("../homeOfficeRules");
-const { broadcastHomeOfficeUpdate } = require("../ws");
+const { broadcastHomeOfficePeriod } = require("../ws");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -65,6 +65,15 @@ async function clearEntriesOnDate(periodId, date) {
   ]);
   await db.run("DELETE FROM ho_entries WHERE period_id = ? AND date = ?", [periodId, date]);
   return affected.map((r) => r.collaborator_id);
+}
+
+// Recarrega o período do zero e manda pronto pra quem estiver conectado —
+// assim quem não foi o autor da mudança não precisa fazer outra requisição
+// só pra buscar o que já foi calculado aqui.
+async function broadcastFreshPeriod(periodId) {
+  const row = await db.get("SELECT * FROM ho_periods WHERE id = ?", [periodId]);
+  if (!row) return;
+  broadcastHomeOfficePeriod(await loadPeriod(row));
 }
 
 function isDateInPeriod(dateStr, period) {
@@ -185,8 +194,9 @@ router.post(
       deadline,
     ]);
     const row = await db.get("SELECT * FROM ho_periods WHERE id = ?", [id]);
-    broadcastHomeOfficeUpdate();
-    res.status(201).json(await loadPeriod(row));
+    const period = await loadPeriod(row);
+    broadcastHomeOfficePeriod(period);
+    res.status(201).json(period);
   })
 );
 
@@ -219,8 +229,9 @@ router.patch(
       await db.run("UPDATE ho_periods SET deadline = ? WHERE id = ?", [deadline, existing.id]);
     }
     const row = await db.get("SELECT * FROM ho_periods WHERE id = ?", [existing.id]);
-    broadcastHomeOfficeUpdate();
-    res.json(await loadPeriod(row));
+    const period = await loadPeriod(row);
+    broadcastHomeOfficePeriod(period);
+    res.json(period);
   })
 );
 
@@ -244,7 +255,7 @@ router.post(
     ]);
     // Reunião Geral bloqueia HO pra empresa inteira nesse dia — limpa quem já tinha marcado.
     const affected = await clearEntriesOnDate(period.id, date);
-    broadcastHomeOfficeUpdate();
+    await broadcastFreshPeriod(period.id);
     res.status(201).json({
       id: Number(info.lastInsertRowid),
       date,
@@ -267,7 +278,7 @@ router.delete(
     if (!meeting) return res.status(404).json({ error: "Reunião não encontrada" });
     if (meeting.period_status !== "open") return res.status(403).json({ error: "Este período já foi aprovado" });
     await db.run("DELETE FROM ho_general_meetings WHERE id = ?", [meeting.id]);
-    broadcastHomeOfficeUpdate();
+    await broadcastFreshPeriod(meeting.period_id);
     res.json({ ok: true });
   })
 );
@@ -296,7 +307,7 @@ router.patch(
 
     if (newDate === oldDate) {
       await db.run("UPDATE ho_general_meetings SET title = ? WHERE id = ?", [title, meeting.id]);
-      broadcastHomeOfficeUpdate();
+      await broadcastFreshPeriod(period.id);
       return res.json({ id: meeting.id, date: newDate, title, movedCollaboratorIds: [], blockedCollaboratorIds: [] });
     }
 
@@ -361,7 +372,7 @@ router.patch(
       }
     }
 
-    broadcastHomeOfficeUpdate();
+    await broadcastFreshPeriod(period.id);
     res.json({ id: meeting.id, date: newDate, title, movedCollaboratorIds, blockedCollaboratorIds });
   })
 );
@@ -413,7 +424,7 @@ router.post(
     );
     // O dia de compensação vira folga — limpa quem já tinha HO marcado nele.
     const affected = await clearEntriesOnDate(period.id, compensationDate);
-    broadcastHomeOfficeUpdate();
+    await broadcastFreshPeriod(period.id);
 
     res.status(201).json({
       id: Number(info.lastInsertRowid),
@@ -441,7 +452,7 @@ router.delete(
     // O feriado volta a ficar bloqueado — limpa quem tinha marcado HO nele
     // enquanto estava "trabalhado".
     const affected = await clearEntriesOnDate(override.period_id, override.holiday_date);
-    broadcastHomeOfficeUpdate();
+    await broadcastFreshPeriod(override.period_id);
     res.json({ ok: true, affectedCollaboratorIds: affected });
   })
 );
@@ -477,7 +488,7 @@ router.post(
       date,
       type,
     ]);
-    broadcastHomeOfficeUpdate();
+    await broadcastFreshPeriod(period.id);
     res.status(201).json({ id: Number(info.lastInsertRowid), collaboratorId, date, type });
   })
 );
@@ -495,7 +506,7 @@ router.delete(
     if (!special) return res.status(404).json({ error: "Registro não encontrado" });
     if (special.period_status !== "open") return res.status(403).json({ error: "Este período já foi aprovado" });
     await db.run("DELETE FROM ho_special_days WHERE id = ?", [special.id]);
-    broadcastHomeOfficeUpdate();
+    await broadcastFreshPeriod(special.period_id);
     res.json({ ok: true });
   })
 );
@@ -605,7 +616,7 @@ router.post(
         collaboratorId,
         date,
       ]);
-      broadcastHomeOfficeUpdate();
+      await broadcastFreshPeriod(period.id);
     }
 
     res.status(existingEntry ? 200 : 201).json({
@@ -631,7 +642,7 @@ router.delete(
       collaboratorId,
       date,
     ]);
-    broadcastHomeOfficeUpdate();
+    await broadcastFreshPeriod(ctx.period.id);
     res.json({ collaboratorId, date, on: false });
   })
 );

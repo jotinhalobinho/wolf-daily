@@ -4,12 +4,13 @@ const { WebSocketServer } = require("ws");
 const cookie = require("cookie");
 const { getUserFromReq } = require("./auth");
 
-// Canal de "a Escala de Home Office mudou" — não sincroniza estado nenhum
-// pelo socket, só avisa quem está com a tela aberta pra buscar os dados de
-// novo pela API de sempre (GET /api/home-office/current ou /periods/:id).
+// Canal de atualização da Escala de Home Office. Manda o período já pronto
+// (não só um "algo mudou") pra quem está com a tela aberta não precisar
+// fazer outra requisição pra buscar os dados — é a diferença entre "chegou
+// na hora" e "chegou o aviso, mas ainda faltava um vai-e-volta pra API".
 // Toda validação/regra de negócio continua só no REST, que é a única fonte
-// da verdade; o WebSocket é apenas o "toque no ombro" pra substituir o F5
-// quando várias pessoas mexem na escala ao mesmo tempo.
+// da verdade; o WebSocket só entrega o resultado já calculado depois que uma
+// mudança passou por todas as checagens de sempre.
 let wss = null;
 let pingInterval = null;
 
@@ -57,14 +58,15 @@ function init(httpServer) {
 
 // Chamado pelas rotas de home-office depois de qualquer mudança que afete a
 // escala visível (entrada de HO, Reunião Geral, férias/dayoff, troca de
-// feriado, abrir/aprovar período) — avisa todo mundo conectado, sem
-// distinguir quem foi; cada tela decide sozinha se recarrega os dados.
-function broadcastHomeOfficeUpdate() {
+// feriado, abrir/aprovar período), já com o período recarregado — o mesmo
+// formato que GET /home-office/current devolve. Avisa todo mundo conectado,
+// sem distinguir quem foi; cada tela só substitui o período que está vendo.
+function broadcastHomeOfficePeriod(period) {
   if (!wss) return;
-  const payload = JSON.stringify({ type: "home-office-updated" });
+  const payload = JSON.stringify({ type: "home-office-period", period });
   for (const socket of wss.clients) {
     if (socket.readyState === socket.OPEN) socket.send(payload);
   }
 }
 
-module.exports = { init, broadcastHomeOfficeUpdate };
+module.exports = { init, broadcastHomeOfficePeriod };

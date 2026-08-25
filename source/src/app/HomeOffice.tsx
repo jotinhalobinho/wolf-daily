@@ -741,8 +741,12 @@ export default function HomeOffice({ sectors, role, currentCollaboratorId }: Hom
       socket.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data);
-          if (msg?.type === "home-office-updated") {
-            apiGet("/home-office/current").then((p) => { if (!stopped) setPeriod(p); }).catch(() => {});
+          // O servidor já manda o período pronto (ver server/src/ws.js) — sem
+          // isso, cada tela precisaria de outro vai-e-volta até a API só pra
+          // buscar o que o servidor tinha acabado de calcular, o que é
+          // perceptível como um atraso extra na atualização.
+          if (msg?.type === "home-office-period" && !stopped) {
+            setPeriod(msg.period);
           }
         } catch {
           // mensagem que não é JSON válido — ignora
