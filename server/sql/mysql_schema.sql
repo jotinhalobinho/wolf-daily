@@ -220,4 +220,39 @@ CREATE TABLE IF NOT EXISTS overtime_entries (
   KEY idx_overtime_collaborator_date (collaborator_id, date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- G4: treinamento interno quinzenal, separado por área (usa os Setores já
+-- cadastrados). O admin agenda data/setor/responsável; o responsável escreve
+-- o tema e sobe a gravação (arquivo fica em server/data/g4-recordings/, ver
+-- server/src/routes/g4.js — não é servido como estático, só por rota
+-- autenticada). g4_views registra quem já assistiu a cada sessão.
+CREATE TABLE IF NOT EXISTS g4_sessions (
+  id                        INT AUTO_INCREMENT PRIMARY KEY,
+  sector_id                 VARCHAR(64) NOT NULL,
+  date                      DATE NOT NULL,
+  presenter_collaborator_id VARCHAR(64) NOT NULL,
+  topic                     VARCHAR(500) NULL,
+  recording_filename        VARCHAR(255) NULL,
+  recording_stored_name     VARCHAR(64) NULL,
+  recording_mime            VARCHAR(100) NULL,
+  recording_size            BIGINT NULL,
+  recording_uploaded_at     DATETIME NULL,
+  created_at                DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_g4_sessions_sector
+    FOREIGN KEY (sector_id) REFERENCES sectors(id) ON DELETE CASCADE,
+  CONSTRAINT fk_g4_sessions_presenter
+    FOREIGN KEY (presenter_collaborator_id) REFERENCES collaborators(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS g4_views (
+  id              INT AUTO_INCREMENT PRIMARY KEY,
+  session_id      INT NOT NULL,
+  collaborator_id VARCHAR(64) NOT NULL,
+  viewed_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_g4_view UNIQUE (session_id, collaborator_id),
+  CONSTRAINT fk_g4_views_session
+    FOREIGN KEY (session_id) REFERENCES g4_sessions(id) ON DELETE CASCADE,
+  CONSTRAINT fk_g4_views_collaborator
+    FOREIGN KEY (collaborator_id) REFERENCES collaborators(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 SET FOREIGN_KEY_CHECKS = 1;
