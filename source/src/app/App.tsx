@@ -6,18 +6,19 @@ import {
   ChevronDown, CheckCircle2, AlertCircle, Clock, FileSpreadsheet, Printer,
   Trash2, Pencil, X, Check, Zap, Lock, Unlock, Shield,
   User, ChevronRight, CalendarDays, Send, MessageSquare,
-  ExternalLink, LogOut, KeyRound, Moon, Sun, Laptop2, Building2, Menu,
+  ExternalLink, LogOut, KeyRound, Moon, Sun, Laptop2, Building2, Menu, GraduationCap,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import DailyRateio from "./DailyRateio";
 import HomeOffice from "./HomeOffice";
 import Overtime from "./Overtime";
+import G4 from "./G4";
 import { Switch } from "./components/ui/switch";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type Unit = "wolf" | "fraga" | "woncred" | "profit";
-type View = "dashboard" | "rateio" | "diario" | "homeoffice" | "horas-extras" | "projetos" | "colaboradores" | "setores" | "acessos" | "relatorios" | "configuracoes";
+type View = "dashboard" | "rateio" | "diario" | "homeoffice" | "horas-extras" | "g4" | "projetos" | "colaboradores" | "setores" | "acessos" | "relatorios" | "configuracoes";
 type UserRole = "admin" | "collaborator";
 type RateioStatus = "open" | "approved";
 
@@ -324,6 +325,7 @@ const ADMIN_NAV: { id: View; label: string; icon: React.ReactNode }[] = [
   { id: "diario", label: "Meu Rateio Diário", icon: <CalendarDays size={16} /> },
   { id: "homeoffice", label: "Home Office", icon: <Laptop2 size={16} /> },
   { id: "horas-extras", label: "Horas Extras", icon: <Clock size={16} /> },
+  { id: "g4", label: "G4", icon: <GraduationCap size={16} /> },
   { id: "projetos", label: "Projetos", icon: <FileSpreadsheet size={16} /> },
   { id: "colaboradores", label: "Colaboradores", icon: <Users size={16} /> },
   { id: "setores", label: "Setores", icon: <Building2 size={16} /> },
@@ -337,6 +339,7 @@ const COLLAB_NAV: { id: View; label: string; icon: React.ReactNode }[] = [
   { id: "diario", label: "Meu Rateio Diário", icon: <CalendarDays size={16} /> },
   { id: "homeoffice", label: "Home Office", icon: <Laptop2 size={16} /> },
   { id: "horas-extras", label: "Horas Extras", icon: <Clock size={16} /> },
+  { id: "g4", label: "G4", icon: <GraduationCap size={16} /> },
 ];
 
 // Conteúdo do menu (itens de navegação + usuário logado) — usado tanto no
@@ -3136,6 +3139,10 @@ function MainApp({ user, onLogout, nightMode, onToggleNightMode }: { user: AuthU
 
       {view === "horas-extras" && (
         <Overtime role={role} currentCollaboratorId={currentCollaboratorId} />
+      )}
+
+      {view === "g4" && (
+        <G4 role={role} currentCollaboratorId={currentCollaboratorId} sectors={sectors} collaborators={collaborators} />
       )}
 
       {view === "projetos" && role === "admin" && (
