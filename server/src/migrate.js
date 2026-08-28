@@ -152,6 +152,17 @@ async function runMigrations() {
     await db.run("ALTER TABLE users ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 0 AFTER password_hash");
     console.log("  [migração] coluna users.must_change_password criada.");
   }
+
+  // Horas Extras — tabela nova (quem já tem o banco criado antes dessa
+  // feature não ganha essa tabela só rodando mysql_schema.sql de novo).
+  await db.run(`CREATE TABLE IF NOT EXISTS overtime_entries (
+    id INT AUTO_INCREMENT PRIMARY KEY, collaborator_id VARCHAR(64) NOT NULL,
+    date DATE NOT NULL, start_minutes SMALLINT NOT NULL, end_minutes SMALLINT NOT NULL,
+    project_name VARCHAR(255) NOT NULL, minutes_50 SMALLINT NOT NULL DEFAULT 0,
+    minutes_100 SMALLINT NOT NULL DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_overtime_entries_collaborator FOREIGN KEY (collaborator_id) REFERENCES collaborators(id) ON DELETE CASCADE,
+    KEY idx_overtime_collaborator_date (collaborator_id, date)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 }
 
 module.exports = { runMigrations };

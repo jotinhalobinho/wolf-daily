@@ -199,4 +199,25 @@ CREATE TABLE IF NOT EXISTS ho_holiday_overrides (
     FOREIGN KEY (period_id) REFERENCES ho_periods(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Horas Extras: registro livre (sem período/aprovação), seccionado por mês
+-- só na tela (a coluna `date` já basta pra filtrar por mês/ano). Um
+-- lançamento pode cruzar a meia-noite: end_minutes pode passar de 1440
+-- (ex: 1800 = "30h" = 06h do dia seguinte). minutes_50/minutes_100 são
+-- calculados uma vez ao salvar (ver server/src/overtimeRules.js) e ficam
+-- desnormalizados pra deixar totais e exportação uma soma direta.
+CREATE TABLE IF NOT EXISTS overtime_entries (
+  id              INT AUTO_INCREMENT PRIMARY KEY,
+  collaborator_id VARCHAR(64) NOT NULL,
+  date            DATE NOT NULL,
+  start_minutes   SMALLINT NOT NULL,
+  end_minutes     SMALLINT NOT NULL,
+  project_name    VARCHAR(255) NOT NULL,
+  minutes_50      SMALLINT NOT NULL DEFAULT 0,
+  minutes_100     SMALLINT NOT NULL DEFAULT 0,
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_overtime_entries_collaborator
+    FOREIGN KEY (collaborator_id) REFERENCES collaborators(id) ON DELETE CASCADE,
+  KEY idx_overtime_collaborator_date (collaborator_id, date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 SET FOREIGN_KEY_CHECKS = 1;
