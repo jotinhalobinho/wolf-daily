@@ -224,6 +224,21 @@ export default function Overtime({ role, currentCollaboratorId }: OvertimeProps)
 
         {hasCollaborator ? (
           <>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-card border border-border rounded-xl p-5">
+                <p className="text-xs text-muted-foreground font-medium mb-1.5">Horas 50%</p>
+                <p className="text-2xl font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmtHours(data?.totalHours50 ?? 0)}h</p>
+              </div>
+              <div className="bg-card border border-border rounded-xl p-5">
+                <p className="text-xs text-muted-foreground font-medium mb-1.5">Horas 100%</p>
+                <p className="text-2xl font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmtHours(data?.totalHours100 ?? 0)}h</p>
+              </div>
+              <div className="bg-card border border-border rounded-xl p-5">
+                <p className="text-xs text-muted-foreground font-medium mb-1.5">Total do mês</p>
+                <p className="text-2xl font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmtHours(data?.totalHours ?? 0)}h</p>
+              </div>
+            </div>
+
             <div className="bg-card border border-border rounded-xl p-4 space-y-3">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Novo lançamento</p>
               <div className="flex flex-wrap items-end gap-2">
@@ -326,19 +341,6 @@ export default function Overtime({ role, currentCollaboratorId }: OvertimeProps)
                       </tr>
                     )}
                   </tbody>
-                  {entries.length > 0 && (
-                    <tfoot>
-                      <tr className="border-t border-border bg-muted/30 font-medium">
-                        <td className="px-4 py-2" colSpan={3}>
-                          Total do mês
-                        </td>
-                        <td className="px-4 py-2 text-right tabular-nums">{fmtHours(data?.totalHours50 ?? 0)}h</td>
-                        <td className="px-4 py-2 text-right tabular-nums">{fmtHours(data?.totalHours100 ?? 0)}h</td>
-                        <td className="px-4 py-2 text-right tabular-nums">{fmtHours(data?.totalHours ?? 0)}h</td>
-                        <td className="px-4 py-2" />
-                      </tr>
-                    </tfoot>
-                  )}
                 </table>
               </div>
             )}
@@ -361,6 +363,20 @@ export default function Overtime({ role, currentCollaboratorId }: OvertimeProps)
                 <FileSpreadsheet size={14} />
                 Exportar Excel
               </button>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-background border border-border rounded-xl p-5">
+                <p className="text-xs text-muted-foreground font-medium mb-1.5">Horas 50% (geral)</p>
+                <p className="text-2xl font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmtHours(adminSummary?.totalHours50 ?? 0)}h</p>
+              </div>
+              <div className="bg-background border border-border rounded-xl p-5">
+                <p className="text-xs text-muted-foreground font-medium mb-1.5">Horas 100% (geral)</p>
+                <p className="text-2xl font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmtHours(adminSummary?.totalHours100 ?? 0)}h</p>
+              </div>
+              <div className="bg-background border border-border rounded-xl p-5">
+                <p className="text-xs text-muted-foreground font-medium mb-1.5">Total geral</p>
+                <p className="text-2xl font-semibold tabular-nums" style={{ fontFamily: "var(--font-mono)" }}>{fmtHours(adminSummary?.totalHours ?? 0)}h</p>
+              </div>
             </div>
             {adminLoading ? (
               <p className="text-sm text-[var(--tone-subtle)]">Carregando…</p>
@@ -392,16 +408,6 @@ export default function Overtime({ role, currentCollaboratorId }: OvertimeProps)
                       </tr>
                     )}
                   </tbody>
-                  {summaryCollaborators.length > 0 && (
-                    <tfoot>
-                      <tr className="border-t border-border font-medium">
-                        <td className="py-1.5">Total geral</td>
-                        <td className="py-1.5 text-right tabular-nums">{fmtHours(adminSummary?.totalHours50 ?? 0)}h</td>
-                        <td className="py-1.5 text-right tabular-nums">{fmtHours(adminSummary?.totalHours100 ?? 0)}h</td>
-                        <td className="py-1.5 text-right tabular-nums">{fmtHours(adminSummary?.totalHours ?? 0)}h</td>
-                      </tr>
-                    </tfoot>
-                  )}
                 </table>
               </div>
             )}
